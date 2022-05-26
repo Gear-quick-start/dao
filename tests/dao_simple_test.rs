@@ -5,10 +5,7 @@ use gtest::{Program, System};
 
 fn init_fungible_token(sys: &System) {
     sys.init_logger();
-    let ft = Program::from_file(
-        sys,
-        "./target/fungible_token.wasm",
-    );
+    let ft = Program::from_file(sys, "./target/fungible_token.wasm");
 
     let res = ft.send(
         100001,

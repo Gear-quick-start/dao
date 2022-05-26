@@ -4,10 +4,7 @@ use ft_io::*;
 use gtest::{Program, System};
 
 fn init_fungible_token(sys: &System) {
-    let ft = Program::from_file(
-        sys,
-        "./target/fungible_token.wasm",
-    );
+    let ft = Program::from_file(sys, "./target/fungible_token.wasm");
 
     let res = ft.send(
         100001,
