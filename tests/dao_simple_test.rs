@@ -233,7 +233,7 @@ fn process_proposal() {
         DaoEvent::ProcessProposal {
             applicant: 4.into(),
             proposal_id: 0,
-            did_pass: true,
+            passed: true,
         }
         .encode()
     )));
@@ -247,7 +247,7 @@ fn process_proposal() {
         DaoEvent::ProcessProposal {
             applicant: 4.into(),
             proposal_id: 1,
-            did_pass: false,
+            passed: false,
         }
         .encode()
     )));
@@ -300,74 +300,6 @@ fn abort_proposal() {
 
     // must fail since the proposal has already been aborted
     let res = dao.send(4, DaoAction::Abort(0));
-    assert!(res.main_failed());
-
-    let res = ft.send(3, FTAction::BalanceOf(4.into()));
-    assert!(res.contains(&(3, FTEvent::Balance(10000000).encode())));
-}
-
-#[test]
-fn cancel_proposal_failures() {
-    let sys = System::new();
-    sys.init_logger();
-    init_fungible_token(&sys);
-    init_dao(&sys);
-
-    let dao = sys.get_program(2);
-    create_membership_proposal(&dao, 0);
-
-    // must fail since the proposal doesnt exist
-    let res = dao.send(3, DaoAction::CancelProposal(1));
-    assert!(res.main_failed());
-
-    // must fail since the caller isn't the proposer
-    let res = dao.send(4, DaoAction::CancelProposal(0));
-    assert!(res.main_failed());
-
-    // must fail since the voting period isnt over
-    let res = dao.send(3, DaoAction::CancelProposal(0));
-    assert!(res.main_failed());
-
-    let res = dao.send(4, DaoAction::Abort(0));
-    assert!(!res.main_failed());
-
-    sys.spend_blocks(1000000001);
-    // must fail since the proposal has been aborted
-    let res = dao.send(3, DaoAction::CancelProposal(0));
-    assert!(res.main_failed());
-
-    create_membership_proposal(&dao, 1);
-    vote(&dao, 1, Vote::Yes);
-    sys.spend_blocks(1000000001);
-    // must fail since YES votes > NO votes
-    let res = dao.send(3, DaoAction::CancelProposal(1));
-    assert!(res.main_failed());
-}
-
-#[test]
-fn cancel_proposal() {
-    let sys = System::new();
-    init_fungible_token(&sys);
-    init_dao(&sys);
-
-    let ft = sys.get_program(1);
-    let dao = sys.get_program(2);
-    create_membership_proposal(&dao, 0);
-    vote(&dao, 0, Vote::No);
-    sys.spend_blocks(1000000001);
-
-    let res = dao.send(3, DaoAction::CancelProposal(0));
-
-    assert!(res.contains(&(
-        3,
-        DaoEvent::Cancel {
-            member: 3.into(),
-            proposal_id: 0,
-        }
-        .encode()
-    )));
-    // must fail since the proposal has already been cancelled
-    let res = dao.send(3, DaoAction::CancelProposal(0));
     assert!(res.main_failed());
 
     let res = ft.send(3, FTAction::BalanceOf(4.into()));

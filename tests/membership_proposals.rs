@@ -34,6 +34,9 @@ impl WasmProgram for FungibleToken {
     fn handle_reply(&mut self, _: Vec<u8>) -> Result<Option<Vec<u8>>, &'static str> {
         Ok(None)
     }
+    fn handle_signal(&mut self, _: Vec<u8>) -> Result<()>, &'static str> {
+        Ok()
+    }
 
     fn meta_state(&mut self, _payload: Option<Vec<u8>>) -> Result<Vec<u8>, &'static str> {
         Ok(Vec::new())
@@ -158,7 +161,7 @@ fn proposal_passed() {
         DaoEvent::ProcessProposal {
             applicant: users[1].into(),
             proposal_id: 10,
-            did_pass: true,
+            passed: true,
         }
         .encode()
     )));
@@ -226,7 +229,7 @@ fn proposal_did_not_pass() {
         DaoEvent::ProcessProposal {
             applicant: users[1].into(),
             proposal_id: 10,
-            did_pass: false,
+            passed: false,
         }
         .encode()
     )));
@@ -294,7 +297,7 @@ fn quorum_is_not_reached() {
         DaoEvent::ProcessProposal {
             applicant: users[1].into(),
             proposal_id: 10,
-            did_pass: false,
+            passed: false,
         }
         .encode()
     )));
@@ -355,7 +358,7 @@ fn ragequit() {
         DaoEvent::ProcessProposal {
             applicant: users[1].into(),
             proposal_id: 10,
-            did_pass: false,
+            passed: false,
         }
         .encode()
     )));
