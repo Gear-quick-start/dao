@@ -15,7 +15,7 @@ struct Dao {
     period_duration: u64,
     voting_period_length: u64,
     grace_period_length: u64,
-    dilution_bound: u128,
+    dilution_bound: u8,
     abort_window: u64,
     total_shares: u128,
     members: BTreeMap<ActorId, Member>,
@@ -39,7 +39,6 @@ pub struct Proposal {
     pub amount: u128,
     pub processed: bool,
     pub passed: bool,
-    pub cancelled: bool,
     pub aborted: bool,
     pub token_tribute: u128,
     pub details: String,
@@ -168,7 +167,7 @@ impl Dao {
         let proposal_id = self.proposal_id;
         // compute startingPeriod for proposal
         // there should be a minimum time interval between proposals (period_duration) so that members have time to ragequit
-        if self.proposal_id > 0 {
+        if proposal_id > 0 {
             let previous_starting_period = self
                 .proposals
                 .get(&(&proposal_id - 1))
@@ -215,6 +214,7 @@ impl Dao {
     /// * `vote`: the member  a member vote (YES or NO)
     fn submit_vote(&mut self, proposal_id: u128, vote: Vote) {
         // checks that proposal exists, the voting period has started, not expired and that member did not vote on the proposal
+
         let proposal = match self.proposals.get_mut(&proposal_id) {
             Some(proposal) => {
                 if exec::block_timestamp() > proposal.starting_period + self.voting_period_length {
@@ -224,7 +224,7 @@ impl Dao {
                     panic!("voting period has not started");
                 }
                 if proposal.votes_by_member.contains_key(&msg::source()) {
-                    panic!("account has already voted on that proposal");
+                    panic!("account has already voted on this proposal");
                 }
                 proposal
             }
@@ -277,7 +277,7 @@ impl Dao {
     /// Requirements:
     /// * The previous proposal must be processed
     /// * The proposal must exist, be ready for processing
-    /// * The proposal must not be cancelled, aborted or already be processed
+    /// * The proposal must not be aborted or already be processed
     ///
     /// Arguments:
     /// * `proposal_id`: the proposal ID
@@ -294,8 +294,8 @@ impl Dao {
         }
         let proposal = match self.proposals.get_mut(&proposal_id) {
             Some(proposal) => {
-                if proposal.processed || proposal.cancelled || proposal.aborted {
-                    panic!("Proposal has already been processed, cancelled or aborted");
+                if proposal.processed || proposal.aborted {
+                    panic!("Proposal has already been processed or aborted");
                 }
                 if exec::block_timestamp()
                     < proposal.starting_period
@@ -313,7 +313,8 @@ impl Dao {
 
         proposal.passed = proposal.yes_votes > proposal.no_votes
             && proposal.yes_votes * 10000 / self.total_shares >= proposal.quorum
-            && proposal.max_total_shares_at_yes_vote < self.dilution_bound * self.total_shares;
+            && proposal.max_total_shares_at_yes_vote
+                < (self.dilution_bound as u128) * self.total_shares;
         // if membership proposal has passed
         if proposal.passed && proposal.is_membership_proposal {
             self.members.entry(proposal.applicant).or_insert(Member {
@@ -327,15 +328,16 @@ impl Dao {
                 .entry(proposal.applicant)
                 .or_insert(proposal.applicant);
             self.total_shares = self.total_shares.saturating_add(proposal.shares_requested);
-        } else if transfer_tokens(
-            current_transaction_id,
-            &self.approved_token_program_id,
-            &exec::program_id(),
-            &proposal.applicant,
-            proposal.token_tribute,
-        )
-        .await
-        .is_err()
+        } else if proposal.is_membership_proposal
+            && transfer_tokens(
+                current_transaction_id,
+                &self.approved_token_program_id,
+                &exec::program_id(),
+                &proposal.applicant,
+                proposal.token_tribute,
+            )
+            .await
+            .is_err()
         {
             // the tokens are on the DAO balance
             // we have to rerun that transaction to return tokens to applicant
@@ -359,10 +361,10 @@ impl Dao {
             // we have to rerun that transaction to transfer tokens to applicant
             return;
         }
+        proposal.processed = true;
         self.transactions.remove(&current_transaction_id);
         msg::reply(
             DaoEvent::ProcessProposal {
-                applicant: proposal.applicant,
                 proposal_id,
                 passed: proposal.passed,
             },
@@ -472,15 +474,8 @@ impl Dao {
             proposal.token_tribute = 0;
             proposal.aborted = true;
 
-            msg::reply(
-                DaoEvent::Abort {
-                    member: msg::source(),
-                    proposal_id,
-                    amount,
-                },
-                0,
-            )
-            .expect("Error in a reply `DaoEvent::Abort`");
+            msg::reply(DaoEvent::Abort(proposal_id), 0)
+                .expect("Error in a reply `DaoEvent::Abort`");
         };
     }
 

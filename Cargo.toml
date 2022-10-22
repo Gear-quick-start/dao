@@ -8,8 +8,8 @@ license = "MIT"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.1.2", default-features = false, features = ["derive", "full"] }
 dao-io = { path = "io" }
-ft-main-io = { git = "https://github.com/gear-dapps/sharded-fungible-token.git" }
-ft-logic-io = { git = "https://github.com/gear-dapps/sharded-fungible-token.git" }
+ft-main-io = { path = "../sharded-fungible-token/ft-main/io" }
+ft-logic-io = { path = "../sharded-fungible-token/ft-logic/io" }
 gstd = { git = "https://github.com/gear-tech/gear.git", features = ["debug"] }
 primitive-types = { version = "0.11.1", default-features = false, features = ["scale-info"]}
 scale-info = { version = "2.2.0", default-features = false, features = ["derive"] }

@@ -40,6 +40,21 @@ pub enum DaoAction {
         quorum: u128,
         details: String,
     },
+
+    /// The proposal of funding.
+    ///
+    /// Requirements:
+    /// * The proposal can be submitted only by the existing members or their delegate addresses;
+    /// * The receiver ID can't be the zero;
+    /// * The DAO must have enough funds to finance the proposal;
+    ///
+    /// Arguments:
+    /// * `receiver`: an actor that will be funded;
+    /// * `amount`: the number of fungible tokens that will be sent to the receiver;
+    /// * `quorum`: a certain threshold of YES votes in order for the proposal to pass;
+    /// * `details`: the proposal description;
+    ///
+    /// On success replies with [`DaoEvent::SubmitFundingProposal`]
     SubmitFundingProposal {
         applicant: ActorId,
         amount: u128,
@@ -80,7 +95,6 @@ pub enum DaoEvent {
         vote: Vote,
     },
     ProcessProposal {
-        applicant: ActorId,
         proposal_id: u128,
         passed: bool,
     },
@@ -88,15 +102,7 @@ pub enum DaoEvent {
         member: ActorId,
         amount: u128,
     },
-    Abort {
-        member: ActorId,
-        proposal_id: u128,
-        amount: u128,
-    },
-    Cancel {
-        member: ActorId,
-        proposal_id: u128,
-    },
+    Abort(u128),
     AdminUpdated(ActorId),
     DelegateKeyUpdated {
         member: ActorId,
@@ -111,7 +117,7 @@ pub struct InitDao {
     pub period_duration: u64,
     pub voting_period_length: u64,
     pub grace_period_length: u64,
-    pub dilution_bound: u128,
+    pub dilution_bound: u8,
     pub abort_window: u64,
 }
 

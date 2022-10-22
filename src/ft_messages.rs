@@ -1,6 +1,6 @@
 use ft_logic_io::Action;
 use ft_main_io::{FTokenAction, FTokenEvent};
-use gstd::{msg, prelude::*, ActorId};
+use gstd::{debug, msg, prelude::*, ActorId};
 
 pub async fn transfer_tokens(
     transaction_id: u64,
@@ -27,7 +27,10 @@ pub async fn transfer_tokens(
 
     match reply {
         Ok(FTokenEvent::Ok) => Ok(()),
-        _ => Err(()),
+        _ => {
+            debug!("Err");
+            Err(())
+        }
     }
 }
 
