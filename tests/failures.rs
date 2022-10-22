@@ -111,6 +111,22 @@ fn submit_vote() {
 
     // must fail since the proposal does not exist
     dao.submit_vote(ADMIN, proposal_id + 2, Vote::Yes, true);
+
+    ftoken.mint(2, applicant, applicant, 2 * token_tribute);
+    ftoken.approve(3, applicant, DAO_ID, token_tribute);
+    dao.submit_membership_proposal(
+        ADMIN,
+        proposal_id + 2,
+        applicant,
+        token_tribute,
+        shares_requested,
+        quorum,
+        false,
+    );
+
+    dao.abort(applicant, proposal_id + 2, false);
+    // must fail since the proposal has been aborted
+    dao.submit_vote(ADMIN, proposal_id + 2, Vote::Yes, true);
 }
 
 #[test]
@@ -158,7 +174,6 @@ fn process_proposal() {
     // must fail since the proposal is not ready to be processed
     dao.process_proposal(proposal_id + 1, true, true);
     dao.abort(applicant, proposal_id + 1, false);
-
     system.spend_blocks(((VOTING_PERIOD_LENGTH + GRACE_PERIOD_LENGTH) / 1000) as u32);
 
     dao.process_proposal(proposal_id, false, false);
@@ -204,6 +219,7 @@ fn abort() {
 
     ftoken.check_balance(applicant, 0);
     dao.abort(applicant, proposal_id, false);
+
     ftoken.check_balance(applicant, token_tribute);
 
     ftoken.approve(2, applicant, DAO_ID, token_tribute);
@@ -221,4 +237,16 @@ fn abort() {
 
     // must fail since the the abort window is over
     dao.abort(ADMIN, proposal_id + 1, true);
+
+    dao.submit_funding_proposal(
+        ADMIN,
+        proposal_id + 2,
+        applicant,
+        token_tribute,
+        quorum,
+        false,
+    );
+
+    // must fail since the the proposal must be membership
+    dao.abort(ADMIN, proposal_id + 2, true);
 }

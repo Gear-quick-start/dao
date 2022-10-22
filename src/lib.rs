@@ -7,6 +7,7 @@ pub mod state;
 use state::*;
 pub mod ft_messages;
 pub use ft_messages::*;
+pub mod utils;
 
 #[derive(Debug, Default)]
 struct Dao {
@@ -141,18 +142,6 @@ impl Dao {
         .expect("Error in a reply `DaoEvent::SubmitMembershipProposal`");
     }
 
-    /// The proposal of funding.
-    ///
-    /// Requirements:
-    /// * The proposal can be submitted only by the existing members or their delegate addresses;
-    /// * The receiver ID can't be the zero;
-    /// * The DAO must have enough funds to finance the proposal;
-    ///
-    /// Arguments:
-    /// * `receiver`: an actor that will be funded;
-    /// * `amount`: the number of fungible tokens that will be sent to the receiver;
-    /// * `quorum`: a certain threshold of YES votes in order for the proposal to pass;
-    /// * `details`: the proposal description;
     fn submit_funding_proposal(
         &mut self,
         applicant: &ActorId,
@@ -202,19 +191,7 @@ impl Dao {
         .expect("Error in a reply `DaoEvent::SubmitFungingProposal");
     }
 
-    /// The member (or the delegate address of the member) submit his vote (YES or NO) on the proposal.
-    ///
-    /// Requirements:
-    /// * The proposal can be submitted only by the existing members or their delegate addresses;
-    /// * The member can vote on the proposal only once;
-    /// * Proposal must exist, the voting period must has started and not expired;
-    ///
-    /// Arguments:
-    /// * `proposal_id`: the proposal ID
-    /// * `vote`: the member  a member vote (YES or NO)
     fn submit_vote(&mut self, proposal_id: u128, vote: Vote) {
-        // checks that proposal exists, the voting period has started, not expired and that member did not vote on the proposal
-
         let proposal = match self.proposals.get_mut(&proposal_id) {
             Some(proposal) => {
                 if exec::block_timestamp() > proposal.starting_period + self.voting_period_length {
@@ -225,6 +202,9 @@ impl Dao {
                 }
                 if proposal.votes_by_member.contains_key(&msg::source()) {
                     panic!("account has already voted on this proposal");
+                }
+                if proposal.aborted {
+                    panic!("The proposal has been aborted");
                 }
                 proposal
             }
@@ -270,17 +250,6 @@ impl Dao {
         .expect("Error in a reply `DaoEvent::SubmitVote`");
     }
 
-    /// The proposal processing after the proposal completes during the grace period.
-    /// If the proposal is accepted, the tribute tokens are deposited into the contract and new shares are minted and issued to the applicant.
-    /// If the proposal is rejected, the tribute tokens are returned to the applicant.
-    ///
-    /// Requirements:
-    /// * The previous proposal must be processed
-    /// * The proposal must exist, be ready for processing
-    /// * The proposal must not be aborted or already be processed
-    ///
-    /// Arguments:
-    /// * `proposal_id`: the proposal ID
     async fn process_proposal(&mut self, transaction_id: Option<u64>, proposal_id: u128) {
         let current_transaction_id = self.get_transaction_id(transaction_id);
         if proposal_id > 0
@@ -373,16 +342,6 @@ impl Dao {
         .expect("Error in a reply `DaoEvent::ProcessProposal`");
     }
 
-    /// Withdraws the capital of the member
-    ///
-    /// Requirements:
-    /// * `msg::source()` must be DAO member
-    /// * The member must have sufficient amount
-    /// * The latest proposal the member voted YES must be processed
-    /// * Admin can ragequit only after transferring his role to another actor
-    ///
-    /// Arguments:
-    /// * `amount`: The amount of shares the member would like to withdraw (the shares are converted to ERC20 tokens)
     async fn ragequit(&mut self, transaction_id: Option<u64>, amount: u128) {
         let current_transaction_id = self.get_transaction_id(transaction_id);
         if self.admin == msg::source() {
@@ -428,17 +387,6 @@ impl Dao {
         };
     }
 
-    /// Aborts the membership proposal.
-    /// It can be used in case when applicant is disagree with the requested shares
-    /// or the details the proposer  indicated by the proposer.
-    ///
-    /// Requirements:
-    /// * `msg::source()` must be the applicant
-    /// * The proposal must be membership proposal
-    /// * The proposal can be aborted during only the abort window
-    /// * The proposal must not be aborted yet
-    /// Arguments:
-    /// * `proposal_id`: the proposal ID
     async fn abort(&mut self, transaction_id: Option<u64>, proposal_id: u128) {
         let current_transaction_id = self.get_transaction_id(transaction_id);
         let proposal = self
@@ -450,9 +398,14 @@ impl Dao {
             panic!("caller must be applicant");
         }
 
+        if !proposal.is_membership_proposal {
+            panic!("The proposal must be membership");
+        }
+
         if proposal.aborted {
             panic!("Proposal has already been aborted");
         }
+
         if exec::block_timestamp() > proposal.starting_period + self.abort_window {
             panic!("The abort window is over");
         }
@@ -479,11 +432,6 @@ impl Dao {
         };
     }
 
-    /// Assigns the admin position to new actor
-    /// Requirements:
-    /// * Only admin can assign new admin
-    /// Arguments:
-    /// * `new_admin`: valid actor ID
     fn set_admin(&mut self, new_admin: &ActorId) {
         self.assert_admin();
         Self::assert_not_zero_address(new_admin);
@@ -492,14 +440,6 @@ impl Dao {
             .expect("Error in a reply `DaoEvent::AdminUpdated`");
     }
 
-    /// Sets the delegate key that is responsible for submitting proposals and voting
-    /// The deleagate key defaults to member address unless updated
-    /// Requirements:
-    /// * `msg::source()` must be DAO member
-    /// * The delegate key must not be zero address
-    /// * A delegate key can be assigned only to one member
-    /// Arguments:
-    /// * `new_delegate_key`: the valid actor ID
     fn update_delegate_key(&mut self, new_delegate_key: &ActorId) {
         if self.member_by_delegate_key.contains_key(new_delegate_key) {
             panic!("cannot overwrite existing delegate keys");
@@ -559,61 +499,7 @@ impl Dao {
                 }
                 _ => unreachable!(),
             }
-        } else {
-            msg::reply(DaoEvent::TransactionProcessed, 0)
-                .expect("Error in a reply `DaoEvent::TransactionProcessed`");
         }
-    }
-
-    // calculates the funds that the member can redeem based on his shares
-    async fn redeemable_funds(&self, share: u128) -> u128 {
-        let balance = balance(&self.approved_token_program_id, &exec::program_id()).await;
-        (share * balance) / self.total_shares
-    }
-
-    // checks that account is DAO member
-    fn is_member(&self, account: &ActorId) -> bool {
-        match self.members.get(account) {
-            Some(member) => {
-                if member.shares == 0 {
-                    return false;
-                }
-            }
-            None => {
-                return false;
-            }
-        }
-        true
-    }
-
-    // check that `msg::source()` is either a DAO member or a delegate key
-    fn check_for_membership(&self) {
-        match self.member_by_delegate_key.get(&msg::source()) {
-            Some(member) if !self.is_member(member) => panic!("account is not a DAO member"),
-            None => panic!("account is not a delegate"),
-            _ => {}
-        }
-    }
-
-    // Determine either this is a new transaction
-    // or the transaction which has to be completed
-    fn get_transaction_id(&mut self, transaction_id: Option<u64>) -> u64 {
-        match transaction_id {
-            Some(transaction_id) => transaction_id,
-            None => {
-                let transaction_id = self.transaction_id;
-                self.transaction_id = self.transaction_id.saturating_add(1);
-                transaction_id
-            }
-        }
-    }
-
-    fn assert_admin(&self) {
-        assert_eq!(msg::source(), self.admin, "msg::source() must be DAO admin");
-    }
-
-    fn assert_not_zero_address(address: &ActorId) {
-        assert!(address != &ActorId::zero(), "Zero address");
     }
 }
 
