@@ -2,9 +2,12 @@ use crate::*;
 
 impl Dao {
     // calculates the funds that the member can redeem based on his shares
-    pub async fn redeemable_funds(&self, share: u128) -> u128 {
-        let balance = balance(&self.approved_token_program_id, &exec::program_id()).await;
-        (share * balance) / self.total_shares
+    pub fn redeemable_funds(&self, share: u128) -> u128 {
+        if self.total_shares > 0 {
+            (share.saturating_mul(self.balance)) / self.total_shares
+        } else {
+            panic!("Zero total shares in DAO!");
+        }
     }
 
     // checks that account is DAO member

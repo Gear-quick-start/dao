@@ -250,3 +250,80 @@ fn abort() {
     // must fail since the the proposal must be membership
     dao.abort(ADMIN, proposal_id + 2, true);
 }
+
+#[test]
+fn ragequit() {
+    let system = System::new();
+    system.init_logger();
+    let ftoken = Program::ftoken(&system);
+    let dao = Program::dao(&system);
+    let applicant: u64 = 200;
+    let token_tribute: u128 = 10_000;
+    let shares_requested: u128 = 10_000;
+    let mut total_shares = 10 * shares_requested + 1;
+    let mut balance = 10 * token_tribute;
+    let ragequit_amount: u128 = 6_000;
+    let quorum: u128 = 50;
+    let mut proposal_id: u128 = 0;
+
+    // add members to DAO
+    for applicant in APPLICANTS {
+        ftoken.mint(0, *applicant, *applicant, token_tribute);
+        ftoken.approve(1, *applicant, DAO_ID, token_tribute);
+        dao.add_member(
+            &system,
+            proposal_id,
+            *applicant,
+            token_tribute,
+            shares_requested,
+        );
+        proposal_id += 1;
+    }
+
+    //membership proposal
+    ftoken.mint(0, applicant, applicant, token_tribute);
+    ftoken.approve(1, applicant, DAO_ID, token_tribute);
+
+    dao.add_to_whitelist(ADMIN, applicant, false);
+    dao.submit_membership_proposal(
+        ADMIN,
+        proposal_id,
+        applicant,
+        token_tribute,
+        shares_requested,
+        quorum,
+        false,
+    );
+
+    // members of DAO vote
+    for applicant in APPLICANTS {
+        let vote: Vote = if applicant < &16 { Vote::Yes } else { Vote::No };
+        dao.submit_vote(*applicant, proposal_id, vote, false);
+    }
+
+    //must fail since the applicant voted YES and the proposal has not been processed
+    dao.ragequit(14, ragequit_amount, 0, true);
+
+    //must fail since an account is not a DAO member
+    dao.ragequit(300, ragequit_amount, 0, true);
+
+    //must fail since a memeber has unsufficient shares
+    dao.ragequit(17, 2 * ragequit_amount, 0, true);
+
+    // successfull ragequit
+    ftoken.check_balance(17, 0);
+    let funds = (balance * ragequit_amount) / (total_shares);
+    dao.ragequit(17, ragequit_amount, funds, false);
+    total_shares -= ragequit_amount;
+    balance -= funds;
+    ftoken.check_balance(17, funds);
+    ftoken.check_balance(DAO_ID, balance + token_tribute);
+
+    // successfull ragequit
+    ftoken.check_balance(18, 0);
+    let funds = (balance * ragequit_amount) / (total_shares);
+    dao.ragequit(18, ragequit_amount, funds, false);
+    balance -= funds;
+    ftoken.check_balance(18, funds);
+    ftoken.check_balance(DAO_ID, balance + token_tribute);
+}

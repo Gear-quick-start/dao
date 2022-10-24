@@ -38,7 +38,7 @@ pub trait Dao {
     );
     fn process_proposal(&self, proposal_id: u128, passed: bool, error: bool);
     fn submit_vote(&self, from: u64, proposal_id: u128, vote: Vote, error: bool);
-    fn ragequit(&self, from: u64, amount: u128, error: bool);
+    fn ragequit(&self, from: u64, amount: u128, funds: u128, error: bool);
     fn abort(&self, from: u64, proposal_id: u128, error: bool);
     fn update_delegate_key(&self, from: u64, account: u64, error: bool);
     fn add_member(
@@ -179,11 +179,11 @@ impl Dao for Program<'_> {
             assert!(res.contains(&(from, reply)));
         }
     }
-    fn ragequit(&self, from: u64, amount: u128, error: bool) {
+    fn ragequit(&self, from: u64, amount: u128, funds: u128, error: bool) {
         let res = self.send(from, DaoAction::RageQuit(amount));
         let reply = DaoEvent::RageQuit {
             member: from.into(),
-            amount,
+            amount: funds,
         }
         .encode();
         if error {

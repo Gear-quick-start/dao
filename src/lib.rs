@@ -9,6 +9,8 @@ pub mod ft_messages;
 pub use ft_messages::*;
 pub mod utils;
 
+pub const BASE_PERCENT: u8 = 100;
+
 #[derive(Debug, Default)]
 struct Dao {
     admin: ActorId,
@@ -19,6 +21,7 @@ struct Dao {
     dilution_bound: u8,
     abort_window: u64,
     total_shares: u128,
+    balance: u128,
     members: BTreeMap<ActorId, Member>,
     member_by_delegate_key: BTreeMap<ActorId, ActorId>,
     proposal_id: u128,
@@ -80,7 +83,6 @@ impl Dao {
         details: String,
     ) {
         let current_transaction_id = self.get_transaction_id(transaction_id);
-
         self.check_for_membership();
         // check that applicant is either in whitelist or a DAO member
         if !self.whitelist.contains(applicant) && !self.members.contains_key(applicant) {
@@ -120,7 +122,7 @@ impl Dao {
             proposer: msg::source(),
             applicant: *applicant,
             shares_requested,
-            quorum,
+            quorum: quorum * BASE_PERCENT as u128,
             is_membership_proposal: true,
             token_tribute,
             details,
@@ -297,6 +299,7 @@ impl Dao {
                 .entry(proposal.applicant)
                 .or_insert(proposal.applicant);
             self.total_shares = self.total_shares.saturating_add(proposal.shares_requested);
+            self.balance = self.balance.saturating_add(proposal.token_tribute);
         } else if proposal.is_membership_proposal
             && transfer_tokens(
                 current_transaction_id,
@@ -347,20 +350,25 @@ impl Dao {
         if self.admin == msg::source() {
             panic!("admin can not ragequit");
         }
+        let funds = self.redeemable_funds(amount);
         let member = self
             .members
             .get_mut(&msg::source())
             .expect("Account is not a DAO member");
+
         if amount > member.shares {
             panic!("unsufficient shares");
         }
 
         let proposal_id = member.highest_index_yes_vote;
-        if !self.proposals.get(&proposal_id).unwrap().processed {
+        if !self
+            .proposals
+            .get(&proposal_id)
+            .expect("Cant be None")
+            .processed
+        {
             panic!("cant ragequit until highest index proposal member voted YES on is processed");
         }
-        member.shares = member.shares.saturating_sub(amount);
-        let funds = self.redeemable_funds(amount).await;
 
         // the tokens are on the DAO balance
         // we have to rerun that transaction to withdraw tokens to applicant in case of error
@@ -374,7 +382,9 @@ impl Dao {
         .await
         .is_ok()
         {
+            member.shares = member.shares.saturating_sub(amount);
             self.total_shares = self.total_shares.saturating_sub(amount);
+            self.balance = self.balance.saturating_sub(funds);
             self.transactions.remove(&current_transaction_id);
             msg::reply(
                 DaoEvent::RageQuit {
