@@ -42,6 +42,6 @@ impl Dao {
     }
 
     pub fn assert_not_zero_address(address: &ActorId) {
-        assert!(address != &ActorId::zero(), "Zero address");
+        assert!(!address.is_zero(), "Zero address");
     }
 }
