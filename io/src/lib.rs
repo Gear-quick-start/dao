@@ -193,7 +193,7 @@ pub enum DaoEvent {
         member: ActorId,
         delegate: ActorId,
     },
-    TransactionFailed(u128),
+    TransactionFailed(u64),
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
