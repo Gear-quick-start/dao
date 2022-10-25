@@ -212,10 +212,3 @@ pub enum Vote {
     Yes,
     No,
 }
-
-#[derive(Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Copy, Clone)]
-pub enum TransactionStatus {
-    InProgress,
-    Success,
-    Failure,
-}
