@@ -12,17 +12,7 @@ impl Dao {
 
     // checks that account is DAO member
     pub fn is_member(&self, account: &ActorId) -> bool {
-        match self.members.get(account) {
-            Some(member) => {
-                if member.shares == 0 {
-                    return false;
-                }
-            }
-            None => {
-                return false;
-            }
-        }
-        true
+        matches!(self.members.get(account), Some(member) if member.shares != 0)
     }
 
     // check that `msg::source()` is either a DAO member or a delegate key

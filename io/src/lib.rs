@@ -1,8 +1,7 @@
 #![no_std]
 
 use codec::{Decode, Encode};
-use gstd::{ActorId, String};
-use scale_info::TypeInfo;
+use gstd::{prelude::*, ActorId};
 
 #[derive(Debug, Decode, Encode, TypeInfo, Clone)]
 pub enum DaoAction {
@@ -13,11 +12,11 @@ pub enum DaoAction {
     /// * Member ID cant be zero;
     /// * Member can not be added to whitelist more than once;
     ///
-    /// Arguments:
-    /// * `member`: valid actor ID
-    ///
     /// On success replies with [`DaoEvent::MemberAddedToWhitelist`]
-    AddToWhiteList(ActorId),
+    AddToWhiteList(
+        /// valid actor ID
+        ActorId,
+    ),
 
     /// The proposal of joining the DAO.
     ///
@@ -25,19 +24,17 @@ pub enum DaoAction {
     /// * The proposal can be submitted only by the existing members or their delegate addresses;
     /// * The applicant account must be either a DAO member or is in the whitelist.
     ///
-    /// Arguments:
-    /// * `applicant`: an actor who wishes to become a DAO member;
-    /// * `token_tribute`: the number of tokens the applicant offered for shares in DAO;
-    /// * `shares_requested`: the amount of shares the applicant is requesting for his token tribute;
-    /// * `quorum`: a certain threshold of YES votes in order for the proposal to pass;
-    /// * `details`: the proposal description.
-    ///
     /// On success replies with [`DaoEvent::SubmitMembershipProposal`]
     SubmitMembershipProposal {
+        /// an actor who wishes to become a DAO member
         applicant: ActorId,
+        /// the number of tokens the applicant offered for shares in DAO
         token_tribute: u128,
+        /// the amount of shares the applicant is requesting for his token tribute
         shares_requested: u128,
+        /// a certain threshold of YES votes in order for the proposal to pass
         quorum: u128,
+        /// the proposal description
         details: String,
     },
 
@@ -48,17 +45,15 @@ pub enum DaoAction {
     /// * The receiver ID can't be the zero;
     /// * The DAO must have enough funds to finance the proposal;
     ///
-    /// Arguments:
-    /// * `receiver`: an actor that will be funded;
-    /// * `amount`: the number of fungible tokens that will be sent to the receiver;
-    /// * `quorum`: a certain threshold of YES votes in order for the proposal to pass;
-    /// * `details`: the proposal description;
-    ///
     /// On success replies with [`DaoEvent::SubmitFundingProposal`]
     SubmitFundingProposal {
+        /// an actor that will be funded
         applicant: ActorId,
+        /// the number of fungible tokens that will be sent to the receiver
         amount: u128,
+        /// a certain threshold of YES votes in order for the proposal to pass
         quorum: u128,
+        /// the proposal description
         details: String,
     },
 
@@ -74,11 +69,11 @@ pub enum DaoAction {
     /// * The proposal must exist and be ready for processing;
     /// * The proposal must not be aborted or already be processed.
     ///
-    /// Arguments:
-    /// * `proposal_id`: the proposal ID
-    ///
     /// On success replies with [`DaoEvent::ProcessProposal`]
-    ProcessProposal(u128),
+    ProcessProposal(
+        /// the proposal ID
+        u128,
+    ),
 
     /// The member (or the delegate address of the member) submits his vote (YES or NO) on the proposal.
     ///
@@ -88,12 +83,13 @@ pub enum DaoAction {
     /// * Proposal must exist, the voting period must has started and not expired;
     /// * Proposal must not be aborted.
     ///
-    /// Arguments:
-    /// * `proposal_id`: the proposal ID
-    /// * `vote`: the member  a member vote (YES or NO)
-    ///
     /// On success replies with [`DaoEvent::SubmitVote`]
-    SubmitVote { proposal_id: u128, vote: Vote },
+    SubmitVote {
+        /// the proposal ID
+        proposal_id: u128,
+        /// the member  a member vote (YES or NO)
+        vote: Vote,
+    },
 
     /// Withdraws the capital of the member.
     ///
@@ -103,11 +99,11 @@ pub enum DaoAction {
     /// * The latest proposal the member voted YES must be processed;
     /// * Admin can ragequit only after transferring his role to another actor.
     ///
-    /// Arguments:
-    /// * `amount`: The amount of shares the member would like to withdraw (the shares are converted to fungible tokens)
-    ///
     /// On success replies with [`DaoEvent::RageQuit`]
-    RageQuit(u128),
+    RageQuit(
+        /// The amount of shares the member would like to withdraw (the shares are converted to fungible tokens)
+        u128,
+    ),
 
     /// Aborts the membership proposal.
     /// It can be used in case when applicant is disagree with the requested shares
@@ -119,11 +115,11 @@ pub enum DaoAction {
     /// * The proposal can be aborted during only the abort window
     /// * The proposal has not be already aborted.
     ///
-    /// Arguments:
-    /// * `proposal_id`: the proposal ID
-    ///
     /// On success replies with [`DaoEvent::Abort`]
-    Abort(u128),
+    Abort(
+        /// the proposal ID
+        u128,
+    ),
 
     /// Sets the delegate key that is responsible for submitting proposals and voting;
     /// The deleagate key defaults to member address unless updated.
@@ -133,22 +129,22 @@ pub enum DaoAction {
     /// * The delegate key must not be zero address;
     /// * A delegate key can be assigned only to one member.
     ///
-    /// Arguments:
-    /// * `new_delegate_key`: the valid actor ID.
-    ///
     /// On success replies with [`DaoEvent::DelegateKeyUpdated`]
-    UpdateDelegateKey(ActorId),
+    UpdateDelegateKey(
+        /// New delegate account
+        ActorId,
+    ),
 
     /// Assigns the admin position to new actor.
     ///
     /// Requirements:
     /// * Only admin can assign new admin.
     ///
-    /// Arguments:
-    /// * `new_admin`: valid actor ID.
-    ///
     /// On success replies with [`DaoEvent::AdminUpdated`]
-    SetAdmin(ActorId),
+    SetAdmin(
+        /// New admin account
+        ActorId,
+    ),
 
     /// Continues the transaction if it fails due to lack of gas
     /// or due to an error in the token contract.
@@ -156,11 +152,11 @@ pub enum DaoAction {
     /// Requirements:
     /// * Transaction must exist.
     ///
-    /// Arguments:
-    /// * `transaction_id`: valid actor ID.
-    ///
     /// On success replies with the payload of continued transaction.
-    Continue(u64),
+    Continue(
+        /// the transaction ID
+        u64,
+    ),
 }
 
 #[derive(Debug, Encode, Decode, TypeInfo)]
@@ -197,6 +193,7 @@ pub enum DaoEvent {
         member: ActorId,
         delegate: ActorId,
     },
+    TransactionFailed(u128),
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]

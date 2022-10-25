@@ -101,6 +101,8 @@ impl Dao {
         .is_err()
         {
             self.transactions.remove(&current_transaction_id);
+            msg::reply(DaoEvent::TransactionFailed(current_transaction_id), 0)
+                .expect("Error in a reply `DaoEvent::TransactionFailed`");
             return;
         };
 
@@ -313,6 +315,8 @@ impl Dao {
         {
             // the tokens are on the DAO balance
             // we have to rerun that transaction to return tokens to applicant
+            msg::reply(DaoEvent::TransactionFailed(current_transaction_id), 0)
+                .expect("Error in a reply `DaoEvent::TransactionFailed`");
             return;
         }
 
@@ -331,6 +335,8 @@ impl Dao {
         {
             // the same is here: the tokens are on the DAO balance
             // we have to rerun that transaction to transfer tokens to applicant
+            msg::reply(DaoEvent::TransactionFailed(current_transaction_id), 0)
+                .expect("Error in a reply `DaoEvent::TransactionFailed`");
             return;
         }
         proposal.processed = true;
@@ -394,6 +400,9 @@ impl Dao {
                 0,
             )
             .expect("Error in a reply `DaoEvent::RageQuit`");
+        } else {
+            msg::reply(DaoEvent::TransactionFailed(current_transaction_id), 0)
+                .expect("Error in a reply `DaoEvent::TransactionFailed`");
         };
     }
 
@@ -439,6 +448,9 @@ impl Dao {
 
             msg::reply(DaoEvent::Abort(proposal_id), 0)
                 .expect("Error in a reply `DaoEvent::Abort`");
+        } else {
+            msg::reply(DaoEvent::TransactionFailed(current_transaction_id), 0)
+                .expect("Error in a reply `DaoEvent::TransactionFailed`");
         };
     }
 
@@ -526,7 +538,7 @@ gstd::metadata! {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn init() {
+unsafe extern "C" fn init() {
     let config: InitDao = msg::load().expect("Unable to decode InitDao");
     let mut dao = Dao {
         admin: config.admin,
@@ -607,7 +619,7 @@ async unsafe fn main() {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn meta_state() -> *mut [i32; 2] {
+unsafe extern "C" fn meta_state() -> *mut [i32; 2] {
     let state: State = msg::load().expect("failed to decode input argument");
     let dao: &mut Dao = DAO.get_or_insert(Dao::default());
     let encoded = match state {
@@ -617,18 +629,10 @@ pub unsafe extern "C" fn meta_state() -> *mut [i32; 2] {
         }
         State::ProposalId => StateReply::ProposalId(dao.proposal_id),
         State::ProposalInfo(input) => {
-            if let Some(proposal) = dao.proposals.get(&input) {
-                StateReply::ProposalInfo(proposal.clone())
-            } else {
-                StateReply::ProposalInfo(Default::default())
-            }
+            StateReply::ProposalInfo(dao.proposals.get(&input).cloned().unwrap_or_default())
         }
         State::MemberInfo(account) => {
-            if let Some(member) = dao.members.get(&account) {
-                StateReply::MemberInfo(member.clone())
-            } else {
-                StateReply::MemberInfo(Default::default())
-            }
+            StateReply::MemberInfo(dao.members.get(&account).cloned().unwrap_or_default())
         }
     }
     .encode();

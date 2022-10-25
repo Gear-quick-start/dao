@@ -16,7 +16,7 @@ fn submit_membership_proposal() {
     let proposal_id: u128 = 0;
 
     let user = 1000;
-    // must fail since account is neither a member no a delegate
+    // must fail since account is neither a member nor a delegate
     dao.submit_membership_proposal(
         user,
         proposal_id,
