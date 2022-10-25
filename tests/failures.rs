@@ -91,7 +91,7 @@ fn submit_vote() {
         false,
     );
 
-    // must fail since the the account is nether a member not a delegate
+    // must fail since the the account is neither a member nor a delegate
     dao.submit_vote(user, proposal_id, Vote::Yes, true);
 
     // must fail since the voting period has not started
