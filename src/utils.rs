@@ -31,7 +31,7 @@ impl Dao {
             Some(transaction_id) => transaction_id,
             None => {
                 let transaction_id = self.transaction_id;
-                self.transaction_id = self.transaction_id.saturating_add(1);
+                self.transaction_id = self.transaction_id.wrapping_add(1);
                 transaction_id
             }
         }

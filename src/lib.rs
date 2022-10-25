@@ -290,12 +290,11 @@ impl Dao {
                 < (self.dilution_bound as u128) * self.total_shares;
         // if membership proposal has passed
         if proposal.passed && proposal.is_membership_proposal {
-            self.members.entry(proposal.applicant).or_insert(Member {
+            let applicant = self.members.entry(proposal.applicant).or_insert(Member {
                 delegate_key: proposal.applicant,
                 shares: 0,
                 highest_index_yes_vote: 0,
             });
-            let applicant = self.members.get_mut(&proposal.applicant).unwrap();
             applicant.shares = applicant.shares.saturating_add(proposal.shares_requested);
             self.member_by_delegate_key
                 .entry(proposal.applicant)
