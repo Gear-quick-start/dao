@@ -1,11 +1,15 @@
 #![no_std]
-pub use dao_io::*;
+
+pub mod io;
+
 use gstd::{exec, msg, prelude::*, ActorId, String};
 pub mod state;
 use state::*;
 pub mod ft_messages;
 pub use ft_messages::*;
 pub mod utils;
+
+pub use crate::io::*;
 
 pub const BASE_PERCENT: u8 = 100;
 
