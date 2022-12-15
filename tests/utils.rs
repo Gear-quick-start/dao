@@ -10,9 +10,15 @@ pub const DAO_ID: u64 = 2;
 pub const PERIOD_DURATION: u64 = 10000000;
 pub const VOTING_PERIOD_LENGTH: u64 = 100000000;
 pub const GRACE_PERIOD_LENGTH: u64 = 10000000;
-const DILUTION_BOUND: u8 = 3;
+pub const DILUTION_BOUND: u8 = 3;
+pub const HASH_LENGTH: usize = 32;
+pub type Hash = [u8; HASH_LENGTH];
 pub const ABORT_WINDOW: u64 = 10000000;
 pub const APPLICANTS: &[u64] = &[10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+pub const DAO_WASM_PATH: &str = "./target/wasm32-unknown-unknown/debug/dao.opt.wasm";
+pub const FT_STORAGE_WASM_PATH: &str = "./target/ft_storage.wasm";
+pub const FT_LOGIC_WASM_PATH: &str = "./target/ft_logic.wasm";
+pub const FT_MAIN_WASM_PATH: &str = "./target/ft_main.wasm";
 
 pub trait Dao {
     fn dao(system: &System) -> Program;
@@ -114,6 +120,7 @@ impl Dao for Program<'_> {
             assert!(res.contains(&(from, reply)));
         }
     }
+
     fn submit_funding_proposal(
         &self,
         from: u64,
@@ -159,6 +166,7 @@ impl Dao for Program<'_> {
             assert!(res.contains(&(ADMIN, reply)));
         }
     }
+
     fn submit_vote(&self, from: u64, proposal_id: u128, vote: Vote, error: bool) {
         let res = self.send(
             from,
@@ -179,6 +187,7 @@ impl Dao for Program<'_> {
             assert!(res.contains(&(from, reply)));
         }
     }
+
     fn ragequit(&self, from: u64, amount: u128, funds: u128, error: bool) {
         let res = self.send(from, DaoAction::RageQuit(amount));
         let reply = DaoEvent::RageQuit {
@@ -192,6 +201,7 @@ impl Dao for Program<'_> {
             assert!(res.contains(&(from, reply)));
         }
     }
+
     fn abort(&self, from: u64, proposal_id: u128, error: bool) {
         let res = self.send(from, DaoAction::Abort(proposal_id));
         let reply = DaoEvent::Abort(proposal_id).encode();
@@ -201,6 +211,7 @@ impl Dao for Program<'_> {
             assert!(res.contains(&(from, reply)));
         }
     }
+
     fn update_delegate_key(&self, from: u64, account: u64, error: bool) {
         let res = self.send(from, DaoAction::UpdateDelegateKey(account.into()));
         let reply = DaoEvent::DelegateKeyUpdated {
@@ -249,10 +260,9 @@ pub trait FToken {
 
 impl FToken for Program<'_> {
     fn ftoken(system: &System) -> Program {
-        let ftoken = Program::from_file(system, "./target/ft_main.wasm");
-        let storage_code_hash: [u8; 32] = system.submit_code("./target/ft_storage.opt.wasm").into();
-
-        let ft_logic_code_hash: [u8; 32] = system.submit_code("./target/ft_logic.opt.wasm").into();
+        let ftoken = Program::from_file(system, FT_MAIN_WASM_PATH);
+        let storage_code_hash: [u8; 32] = system.submit_code(FT_STORAGE_WASM_PATH).into();
+        let ft_logic_code_hash: [u8; 32] = system.submit_code(FT_LOGIC_WASM_PATH).into();
 
         let res = ftoken.send(
             100,
