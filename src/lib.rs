@@ -6,6 +6,7 @@ pub mod state;
 pub mod utils;
 
 use gstd::{exec, msg, prelude::*, ActorId, String};
+use hashbrown::HashMap;
 
 use crate::{ft_messages::*, io::*, state::*};
 
@@ -22,13 +23,13 @@ struct Dao {
     abort_window: u64,
     total_shares: u128,
     balance: u128,
-    members: BTreeMap<ActorId, Member>,
-    member_by_delegate_key: BTreeMap<ActorId, ActorId>,
+    members: HashMap<ActorId, Member>,
+    member_by_delegate_key: HashMap<ActorId, ActorId>,
     proposal_id: u128,
-    proposals: BTreeMap<u128, Proposal>,
+    proposals: HashMap<u128, Proposal>,
     whitelist: Vec<ActorId>,
     transaction_id: u64,
-    transactions: BTreeMap<u64, Option<DaoAction>>,
+    transactions: HashMap<u64, Option<DaoAction>>,
 }
 
 #[derive(Debug, Default, Clone, Decode, Encode, TypeInfo)]
