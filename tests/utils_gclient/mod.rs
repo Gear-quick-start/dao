@@ -1,25 +1,50 @@
-mod utils;
-
 use blake2_rfc::blake2b;
 use dao::io::{DaoAction, InitDao, Vote};
 use ft_logic_io::Action;
 use ft_main_io::{FTokenAction, FTokenEvent, InitFToken};
 use gclient::{EventListener, EventProcessor, GearApi, Result};
-use gstd::{prelude::*, ActorId, Encode};
-use utils::{
-    Hash, ABORT_WINDOW, ADMIN, DAO_WASM_PATH, DILUTION_BOUND, FT_LOGIC_WASM_PATH,
-    FT_MAIN_WASM_PATH, FT_STORAGE_WASM_PATH, GRACE_PERIOD_LENGTH, HASH_LENGTH, PERIOD_DURATION,
-    VOTING_PERIOD_LENGTH,
-};
+use gstd::{prelude::*, ActorId, Encode, MessageId};
 
-async fn dao_add_to_whitelist(
+pub const ADMIN: &str = "//Bob";
+pub const APPLICANTS: &[&str] = &[
+    "//John", "//Mike", "//Dan", "//Bot", "//Jack", "//Mops", "//Alex", "//Kek", "//Xuan",
+    "//Pedro",
+];
+pub const PERIOD_DURATION: u64 = 10000000;
+pub const VOTING_PERIOD_LENGTH: u64 = 100000000;
+pub const GRACE_PERIOD_LENGTH: u64 = 10000000;
+pub const DILUTION_BOUND: u8 = 3;
+pub const HASH_LENGTH: usize = 32;
+pub type Hash = [u8; HASH_LENGTH];
+pub const ABORT_WINDOW: u64 = 10000000;
+pub const DAO_WASM_PATH: &str = "./target/wasm32-unknown-unknown/debug/dao.opt.wasm";
+pub const FT_STORAGE_WASM_PATH: &str = "./target/ft_storage.wasm";
+pub const FT_LOGIC_WASM_PATH: &str = "./target/ft_logic.wasm";
+pub const FT_MAIN_WASM_PATH: &str = "./target/ft_main.wasm";
+
+pub trait GetActorId {
+    fn get_actor_id(&self) -> ActorId;
+}
+
+impl GetActorId for GearApi {
+    fn get_actor_id(&self) -> ActorId {
+        ActorId::new(
+            self.account_id()
+                .encode()
+                .try_into()
+                .expect("Unexpected invalid account id length."),
+        )
+    }
+}
+
+pub async fn dao_add_to_whitelist(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
-    account: u64,
+    account: ActorId,
     error: bool,
 ) -> Result<()> {
-    let payload = DaoAction::AddToWhiteList(account.into());
+    let payload = DaoAction::AddToWhiteList(account);
 
     let program_id: Hash = dao_id
         .encode()
@@ -42,19 +67,19 @@ async fn dao_add_to_whitelist(
     Ok(())
 }
 
-async fn dao_submit_membership_proposal(
+pub async fn dao_submit_membership_proposal(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
     _proposal_id: u128,
-    applicant: u64,
+    applicant: ActorId,
     token_tribute: u128,
     shares_requested: u128,
     quorum: u128,
     error: bool,
 ) -> Result<()> {
     let payload = DaoAction::SubmitMembershipProposal {
-        applicant: applicant.into(),
+        applicant,
         token_tribute,
         shares_requested,
         quorum,
@@ -82,18 +107,18 @@ async fn dao_submit_membership_proposal(
     Ok(())
 }
 
-async fn dao_submit_funding_proposal(
+pub async fn dao_submit_funding_proposal(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
     _proposal_id: u128,
-    applicant: u64,
+    applicant: ActorId,
     amount: u128,
     quorum: u128,
     error: bool,
 ) -> Result<()> {
     let payload = DaoAction::SubmitFundingProposal {
-        applicant: applicant.into(),
+        applicant,
         amount,
         quorum,
         details: String::from(""),
@@ -120,7 +145,7 @@ async fn dao_submit_funding_proposal(
     Ok(())
 }
 
-async fn dao_process_proposal(
+pub async fn dao_process_proposal(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
@@ -151,7 +176,7 @@ async fn dao_process_proposal(
     Ok(())
 }
 
-async fn dao_submit_vote(
+pub async fn dao_submit_vote(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
@@ -182,7 +207,7 @@ async fn dao_submit_vote(
     Ok(())
 }
 
-async fn dao_ragequit(
+pub async fn dao_ragequit(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
@@ -213,7 +238,7 @@ async fn dao_ragequit(
     Ok(())
 }
 
-async fn dao_abort(
+pub async fn dao_abort(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
@@ -243,14 +268,14 @@ async fn dao_abort(
     Ok(())
 }
 
-async fn dao_update_delegate_key(
+pub async fn dao_update_delegate_key(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
-    account: u64,
+    account: ActorId,
     error: bool,
 ) -> Result<()> {
-    let payload = DaoAction::UpdateDelegateKey(account.into());
+    let payload = DaoAction::UpdateDelegateKey(account);
 
     let program_id: Hash = dao_id
         .encode()
@@ -273,12 +298,12 @@ async fn dao_update_delegate_key(
     Ok(())
 }
 
-async fn dao_add_member(
+pub async fn dao_add_member(
     api: &GearApi,
     listener: &mut EventListener,
     dao_id: ActorId,
     proposal_id: u128,
-    applicant: u64,
+    applicant: ActorId,
     token_tribute: u128,
     shares_requested: u128,
 ) -> Result<()> {
@@ -297,25 +322,22 @@ async fn dao_add_member(
     .await?;
     dao_submit_vote(api, listener, dao_id, proposal_id, Vote::Yes, false).await?;
     // TODO: Spend blocks
-    dao_process_proposal(api, listener, dao_id, proposal_id, true, false).await?;
 
+    dao_process_proposal(api, listener, dao_id, proposal_id, true, false).await?;
     Ok(())
 }
 
-async fn token_mint(
+pub async fn token_mint(
     api: &GearApi,
+    listener: &mut EventListener,
     token_id: ActorId,
     transaction_id: u64,
-    account: u64,
+    recipient: ActorId,
     amount: u128,
 ) -> Result<()> {
     let payload = FTokenAction::Message {
         transaction_id,
-        payload: Action::Mint {
-            recipient: account.into(),
-            amount,
-        }
-        .encode(),
+        payload: Action::Mint { recipient, amount }.encode(),
     };
 
     let program_id: Hash = token_id
@@ -327,23 +349,26 @@ async fn token_mint(
         .calculate_handle_gas(None, program_id.into(), payload.encode(), 0, true, None)
         .await?;
 
-    api.send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+    let (message_id, _) = api
+        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
         .await?;
+
+    assert!(listener.message_processed(message_id).await?.succeed());
 
     Ok(())
 }
 
-async fn token_approve(
+pub async fn token_approve(
     api: &GearApi,
     token_id: ActorId,
     transaction_id: u64,
-    approved_account: u64,
+    approved_account: ActorId,
     amount: u128,
 ) -> Result<()> {
     let payload = FTokenAction::Message {
         transaction_id,
         payload: Action::Approve {
-            approved_account: approved_account.into(),
+            approved_account,
             amount,
         }
         .encode(),
@@ -364,7 +389,7 @@ async fn token_approve(
     Ok(())
 }
 
-async fn token_check_balance(
+pub async fn token_check_balance(
     api: &GearApi,
     token_id: ActorId,
     account: u64,
@@ -391,7 +416,7 @@ async fn token_check_balance(
         .await?;
 
     let (stored_message, _) = api
-        .get_from_mailbox(&account.into(), message_id)
+        .get_from_mailbox(message_id)
         .await?
         .expect("Unexpected empty mailbox.");
     assert_eq!(
@@ -402,7 +427,7 @@ async fn token_check_balance(
     Ok(())
 }
 
-async fn upload_and_init_program(
+pub async fn upload_and_init_program(
     api: &GearApi,
     listener: &mut EventListener,
     wasm_path: impl AsRef<str>,
@@ -441,7 +466,7 @@ async fn upload_and_init_program(
     ))
 }
 
-async fn upload_with_code_hash(api: &GearApi, wasm_path: impl AsRef<str>) -> Result<Hash> {
+pub async fn upload_with_code_hash(api: &GearApi, wasm_path: impl AsRef<str>) -> Result<Hash> {
     let mut code_hash: Hash = Default::default();
     let wasm_code = gclient::code_from_os(wasm_path.as_ref())?;
 
@@ -452,16 +477,15 @@ async fn upload_with_code_hash(api: &GearApi, wasm_path: impl AsRef<str>) -> Res
     Ok(code_hash)
 }
 
-#[tokio::test]
-async fn setup_gclient() -> Result<()> {
-    let api = GearApi::dev().await?.with("//Bob")?;
+pub async fn setup_gclient() -> Result<(GearApi, EventListener, ActorId, ActorId)> {
+    let api = GearApi::dev().await?.with(ADMIN)?;
     let mut listener = api.subscribe().await?;
 
     assert!(listener.blocks_running().await?);
 
     // 1. Upload ft code hashes
-    let ft_logic_code_hash = upload_with_code_hash(&api, FT_LOGIC_WASM_PATH).await?;
     let ft_storage_code_hash = upload_with_code_hash(&api, FT_STORAGE_WASM_PATH).await?;
+    let ft_logic_code_hash = upload_with_code_hash(&api, FT_LOGIC_WASM_PATH).await?;
 
     // 2. Upload main ft
     let ft_token_id = upload_and_init_program(
@@ -477,12 +501,12 @@ async fn setup_gclient() -> Result<()> {
     .await?;
 
     // 3. Upload dao
-    let _dao_id = upload_and_init_program(
+    let dao_id = upload_and_init_program(
         &api,
         &mut listener,
         DAO_WASM_PATH,
         &InitDao {
-            admin: ADMIN.into(),
+            admin: api.get_actor_id(),
             approved_token_program_id: ft_token_id,
             period_duration: PERIOD_DURATION,
             voting_period_length: VOTING_PERIOD_LENGTH,
@@ -494,5 +518,9 @@ async fn setup_gclient() -> Result<()> {
     )
     .await?;
 
-    Ok(())
+    println!("FT_TOKEN_ID: {:?}", ft_token_id);
+    println!("FT_STORAGE_CODE_HASH: {:?}", ft_storage_code_hash);
+    println!("FT_LOGIC_CODE_HASH: {:?}", ft_logic_code_hash);
+
+    Ok((api, listener, ft_token_id, dao_id))
 }

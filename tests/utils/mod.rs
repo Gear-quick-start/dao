@@ -265,7 +265,7 @@ impl FToken for Program<'_> {
         let ft_logic_code_hash: [u8; 32] = system.submit_code(FT_LOGIC_WASM_PATH).into();
 
         let res = ftoken.send(
-            100,
+            ADMIN,
             InitFToken {
                 storage_code_hash: storage_code_hash.into(),
                 ft_logic_code_hash: ft_logic_code_hash.into(),

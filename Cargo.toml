@@ -13,7 +13,7 @@ gstd = { git = "https://github.com/gear-tech/gear.git", branch = "stable" }
 scale-info = { version = "2.3.0", default-features = false }
 
 [dev-dependencies]
-gclient = { git = "https://github.com/gear-tech/gear.git", branch = "stable" }
+gclient = { git = "https://github.com/gear-tech/gear.git", branch = "master" }
 tokio = { version = "1.23.0", features = ["full"] }
 blake2-rfc = { version = "0.2.18", default-features = false }
 gstd = { git = "https://github.com/gear-tech/gear.git", branch = "stable", features = ["debug"] }
