@@ -1,7 +1,6 @@
 mod utils;
 mod utils_gclient;
 
-use dao::io::*;
 use gstd::prelude::*;
 use utils_gclient::*;
 
@@ -12,12 +11,16 @@ async fn membership_proposals_gclient() {
 
     let token_tribute: u128 = 10_000;
     let shares_requested: u128 = 10_000;
-    let applicant: u64 = 200;
     let quorum: u128 = 50;
     let mut proposal_id: u128 = 0;
+    let mut last_start_proposal_timestamp;
 
     // Add members to DAO
+    println!("-> Add members to DAO!");
+
     for applicant in APPLICANTS {
+        println!("Applicant: {applicant}");
+
         let api = api
             .clone()
             .with(applicant)
@@ -34,12 +37,12 @@ async fn membership_proposals_gclient() {
         )
         .await
         .expect("Unable to mint token.");
-        /* token_approve(&api, ft_token_id, 1, dao_id, token_tribute)
+        token_approve(&api, &mut listener, ft_token_id, 1, dao_id, token_tribute)
             .await
             .expect("Unable to approve token.");
 
-        let api = api.with(ADMIN).expect("Unable to change signer."); */
-        /* dao_add_member(
+        let api = api.with(ADMIN).expect("Unable to change signer.");
+        dao_add_member(
             &api,
             &mut listener,
             dao_id,
@@ -49,20 +52,167 @@ async fn membership_proposals_gclient() {
             shares_requested,
         )
         .await
-        .expect("Unable to add dao member"); */
+        .expect("Unable to add dao member");
+
+        proposal_id += 1;
+    }
+
+    // Membership proposal
+    {
+        println!("-> Membership proposal!");
+
+        let api = api
+            .clone()
+            .with(RANDOM_APPLICANT)
+            .expect("Unable to change signer.");
+        let applicant_id = api.get_actor_id();
+
+        token_mint(
+            &api,
+            &mut listener,
+            ft_token_id,
+            0,
+            applicant_id,
+            token_tribute,
+        )
+        .await
+        .expect("Unable to mint token.");
+        token_approve(&api, &mut listener, ft_token_id, 1, dao_id, token_tribute)
+            .await
+            .expect("Unable to approve token.");
+
+        let api = api.with(ADMIN).expect("Unable to change signer.");
+        dao_add_to_whitelist(&api, &mut listener, dao_id, applicant_id, false)
+            .await
+            .expect("Unable to add applicant to dao whitelist");
+
+        dao_submit_membership_proposal(
+            &api,
+            &mut listener,
+            dao_id,
+            proposal_id,
+            applicant_id,
+            token_tribute,
+            shares_requested,
+            quorum,
+            false,
+        )
+        .await
+        .expect("Unable to submit dao membership proposal.");
+
+        last_start_proposal_timestamp = api
+            .last_block_timestamp()
+            .await
+            .expect("Unable obtain block timestamp.");
+    }
+
+    // Members of DAO vote
+    {
+        println!("-> Members of DAO vote!");
+
+        for (index, applicant) in APPLICANTS.iter().enumerate() {
+            println!("Applicant: {applicant}");
+
+            let api = api
+                .clone()
+                .with(applicant)
+                .expect("Unable to change signer.");
+
+            let vote: dao::io::Vote = if index < 16 {
+                dao::io::Vote::Yes
+            } else {
+                dao::io::Vote::No
+            };
+
+            dao_submit_vote(&api, &mut listener, dao_id, proposal_id, vote, false)
+                .await
+                .expect("Unable to submit vote to dao.");
+        }
+
+        wait_for_voting_finish(&api, last_start_proposal_timestamp)
+            .await
+            .expect("Unable to wait for voting finish.");
+
+        let api = api.clone().with(ADMIN).expect("Unable to change signer.");
+        dao_process_proposal(&api, &mut listener, dao_id, proposal_id, true, false)
+            .await
+            .expect("Unable to process proposal.");
+    }
+
+    // New proposal
+    {
+        println!("-> New proposal!");
+
+        let api = api
+            .clone()
+            .with(RANDOM_APPLICANT)
+            .expect("Unable to change signer.");
+        let applicant_id = api.get_actor_id();
+
+        token_mint(
+            &api,
+            &mut listener,
+            ft_token_id,
+            2,
+            applicant_id,
+            token_tribute,
+        )
+        .await
+        .expect("Unable to mint token.");
+        token_approve(&api, &mut listener, ft_token_id, 3, dao_id, token_tribute)
+            .await
+            .expect("Unable to approve token.");
 
         proposal_id += 1;
 
-        /* ftoken.mint(0, *applicant, *applicant, token_tribute);
-        ftoken.approve(1, *applicant, DAO_ID, token_tribute);
-        dao.add_member(
-            &system,
+        let api = api.clone().with(ADMIN).expect("Unable to change signer.");
+
+        dao_submit_membership_proposal(
+            &api,
+            &mut listener,
+            dao_id,
             proposal_id,
-            *applicant,
+            applicant_id,
             token_tribute,
             shares_requested,
-        );
-        proposal_id += 1; */
+            quorum,
+            false,
+        )
+        .await
+        .expect("Unable to submit dao membership proposal.");
+
+        last_start_proposal_timestamp = api
+            .last_block_timestamp()
+            .await
+            .expect("Unable obtain block timestamp.");
+
+        for (index, applicant) in APPLICANTS.iter().enumerate() {
+            println!("Applicant: {applicant}");
+
+            let api = api
+                .clone()
+                .with(applicant)
+                .expect("Unable to change signer.");
+
+            let vote: dao::io::Vote = if index < 16 {
+                dao::io::Vote::No
+            } else {
+                dao::io::Vote::Yes
+            };
+
+            dao_submit_vote(&api, &mut listener, dao_id, proposal_id, vote, false)
+                .await
+                .expect("Unable to submit vote to dao.");
+        }
+
+        wait_for_voting_finish(&api, last_start_proposal_timestamp)
+            .await
+            .expect("Unable to wait for voting finish.");
+
+        let api = api.clone().with(ADMIN).expect("Unable to change signer.");
+        dao_process_proposal(&api, &mut listener, dao_id, proposal_id, false, false)
+            .await
+            .expect("Unable to process proposal.");
     }
 
     /* let system = System::new();
@@ -151,6 +301,165 @@ async fn membership_proposals_gclient() {
 
 #[tokio::test]
 async fn funding_proposals_gclient() {
+    let (api, mut listener, ft_token_id, dao_id) =
+        setup_gclient().await.expect("Unable to setup gclient.");
+
+    let amount = 30_000;
+    let token_tribute: u128 = 10_000;
+    let shares_requested: u128 = 10_000;
+    let receiver: &str = ADMIN;
+    let quorum: u128 = 50;
+    let mut proposal_id: u128 = 0;
+    let mut last_start_proposal_timestamp;
+
+    // Add members to DAO
+    println!("-> Add members to DAO!");
+
+    for applicant in APPLICANTS {
+        println!("Applicant: {applicant}");
+
+        let api = api
+            .clone()
+            .with(applicant)
+            .expect("Unable to change signer.");
+        let applicant_id = api.get_actor_id();
+
+        token_mint(
+            &api,
+            &mut listener,
+            ft_token_id,
+            0,
+            applicant_id,
+            token_tribute,
+        )
+        .await
+        .expect("Unable to mint token.");
+        token_approve(&api, &mut listener, ft_token_id, 1, dao_id, token_tribute)
+            .await
+            .expect("Unable to approve token.");
+
+        let api = api.with(ADMIN).expect("Unable to change signer.");
+        dao_add_member(
+            &api,
+            &mut listener,
+            dao_id,
+            proposal_id,
+            applicant_id,
+            token_tribute,
+            shares_requested,
+        )
+        .await
+        .expect("Unable to add dao member");
+
+        proposal_id += 1;
+    }
+
+    // Funding proposal
+    {
+        println!("-> Funding proposal");
+
+        let api = api.clone().with(ADMIN).expect("Unable to change signer.");
+        dao_submit_funding_proposal(
+            &api,
+            &mut listener,
+            dao_id,
+            proposal_id,
+            api.get_specific_actor_id(receiver),
+            amount,
+            quorum,
+            false,
+        )
+        .await
+        .expect("Unable to submit dao funding proposal.");
+
+        last_start_proposal_timestamp = api
+            .last_block_timestamp()
+            .await
+            .expect("Unable obtain block timestamp.");
+
+        for (index, applicant) in APPLICANTS.iter().enumerate() {
+            println!("Applicant: {applicant}");
+
+            let api = api
+                .clone()
+                .with(applicant)
+                .expect("Unable to change signer.");
+
+            let vote: dao::io::Vote = if index < 16 {
+                dao::io::Vote::Yes
+            } else {
+                dao::io::Vote::No
+            };
+
+            dao_submit_vote(&api, &mut listener, dao_id, proposal_id, vote, false)
+                .await
+                .expect("Unable to submit vote to dao.");
+        }
+
+        wait_for_voting_finish(&api, last_start_proposal_timestamp)
+            .await
+            .expect("Unable to wait for voting finish.");
+
+        let api = api.clone().with(ADMIN).expect("Unable to change signer.");
+        dao_process_proposal(&api, &mut listener, dao_id, proposal_id, true, false)
+            .await
+            .expect("Unable to process proposal.");
+
+        proposal_id += 1;
+    }
+
+    // New proposal
+    {
+        println!("-> New proposal");
+
+        let api = api.with(ADMIN).expect("Unable to change signer.");
+        dao_submit_funding_proposal(
+            &api,
+            &mut listener,
+            dao_id,
+            proposal_id,
+            api.get_specific_actor_id(receiver),
+            amount,
+            quorum,
+            false,
+        )
+        .await
+        .expect("Unable to submit dao funding proposal.");
+
+        last_start_proposal_timestamp = api
+            .last_block_timestamp()
+            .await
+            .expect("Unable obtain block timestamp.");
+
+        for (index, applicant) in APPLICANTS.iter().enumerate() {
+            println!("Applicant: {applicant}");
+
+            let api = api
+                .clone()
+                .with(applicant)
+                .expect("Unable to change signer.");
+
+            let vote: dao::io::Vote = if index < 16 {
+                dao::io::Vote::No
+            } else {
+                dao::io::Vote::Yes
+            };
+
+            dao_submit_vote(&api, &mut listener, dao_id, proposal_id, vote, false)
+                .await
+                .expect("Unable to submit vote to dao.");
+        }
+
+        wait_for_voting_finish(&api, last_start_proposal_timestamp)
+            .await
+            .expect("Unable to wait for voting finish.");
+
+        let api = api.clone().with(ADMIN).expect("Unable to change signer.");
+        dao_process_proposal(&api, &mut listener, dao_id, proposal_id, true, false)
+            .await
+            .expect("Unable to process proposal.");
+    }
+
     /* let system = System::new();
     system.init_logger();
     let ftoken = Program::ftoken(&system);

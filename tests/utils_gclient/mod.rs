@@ -3,30 +3,31 @@ use dao::io::{DaoAction, InitDao, Vote};
 use ft_logic_io::Action;
 use ft_main_io::{FTokenAction, FTokenEvent, InitFToken};
 use gclient::{EventListener, EventProcessor, GearApi, Result};
-use gstd::{prelude::*, ActorId, Encode, MessageId};
+use gstd::{prelude::*, ActorId, Encode};
 
 pub const ADMIN: &str = "//Bob";
 pub const APPLICANTS: &[&str] = &[
-    "//John", "//Mike", "//Dan", "//Bot", "//Jack", "//Mops", "//Alex", "//Kek", "//Xuan",
-    "//Pedro",
+    "//John", "//Mike", "//Dan", "//Bot", "//Jack", "//Mops", "//Alex",
 ];
-pub const PERIOD_DURATION: u64 = 10000000;
-pub const VOTING_PERIOD_LENGTH: u64 = 100000000;
-pub const GRACE_PERIOD_LENGTH: u64 = 10000000;
+pub const RANDOM_APPLICANT: &str = "//Josh";
+pub const PERIOD_DURATION: u64 = 1000;
+pub const VOTING_PERIOD_LENGTH: u64 = 30000;
+pub const GRACE_PERIOD_LENGTH: u64 = 500;
 pub const DILUTION_BOUND: u8 = 3;
 pub const HASH_LENGTH: usize = 32;
 pub type Hash = [u8; HASH_LENGTH];
-pub const ABORT_WINDOW: u64 = 10000000;
+pub const ABORT_WINDOW: u64 = 1000;
 pub const DAO_WASM_PATH: &str = "./target/wasm32-unknown-unknown/debug/dao.opt.wasm";
 pub const FT_STORAGE_WASM_PATH: &str = "./target/ft_storage.wasm";
 pub const FT_LOGIC_WASM_PATH: &str = "./target/ft_logic.wasm";
 pub const FT_MAIN_WASM_PATH: &str = "./target/ft_main.wasm";
 
-pub trait GetActorId {
+pub trait ApiUtils {
     fn get_actor_id(&self) -> ActorId;
+    fn get_specific_actor_id(&self, value: impl AsRef<str>) -> ActorId;
 }
 
-impl GetActorId for GearApi {
+impl ApiUtils for GearApi {
     fn get_actor_id(&self) -> ActorId {
         ActorId::new(
             self.account_id()
@@ -34,6 +35,14 @@ impl GetActorId for GearApi {
                 .try_into()
                 .expect("Unexpected invalid account id length."),
         )
+    }
+
+    fn get_specific_actor_id(&self, value: impl AsRef<str>) -> ActorId {
+        let api_temp = self
+            .clone()
+            .with(value)
+            .expect("Unable to build `GearApi` instance with provided signer.");
+        api_temp.get_actor_id()
     }
 }
 
@@ -56,7 +65,7 @@ pub async fn dao_add_to_whitelist(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert_eq!(
@@ -96,7 +105,7 @@ pub async fn dao_submit_membership_proposal(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert_eq!(
@@ -134,7 +143,7 @@ pub async fn dao_submit_funding_proposal(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert_eq!(
@@ -165,7 +174,7 @@ pub async fn dao_process_proposal(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert_eq!(
@@ -196,7 +205,7 @@ pub async fn dao_submit_vote(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert_eq!(
@@ -227,7 +236,7 @@ pub async fn dao_ragequit(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert_eq!(
@@ -257,7 +266,7 @@ pub async fn dao_abort(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert_eq!(
@@ -287,13 +296,22 @@ pub async fn dao_update_delegate_key(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert_eq!(
         listener.message_processed(message_id).await?.succeed(),
         !error
     );
+
+    Ok(())
+}
+
+pub async fn wait_for_voting_finish(api: &GearApi, start_timestamp: u64) -> Result<()> {
+    let voting_end_timestamp = start_timestamp + VOTING_PERIOD_LENGTH + GRACE_PERIOD_LENGTH;
+    while api.last_block_timestamp().await? < voting_end_timestamp {
+        // NOOP
+    }
 
     Ok(())
 }
@@ -320,8 +338,13 @@ pub async fn dao_add_member(
         false,
     )
     .await?;
+
+    let voting_started_timestamp = api.last_block_timestamp().await?;
+
     dao_submit_vote(api, listener, dao_id, proposal_id, Vote::Yes, false).await?;
-    // TODO: Spend blocks
+
+    // Spend blocks
+    wait_for_voting_finish(api, voting_started_timestamp).await?;
 
     dao_process_proposal(api, listener, dao_id, proposal_id, true, false).await?;
     Ok(())
@@ -350,7 +373,7 @@ pub async fn token_mint(
         .await?;
 
     let (message_id, _) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     assert!(listener.message_processed(message_id).await?.succeed());
@@ -360,6 +383,7 @@ pub async fn token_mint(
 
 pub async fn token_approve(
     api: &GearApi,
+    listener: &mut EventListener,
     token_id: ActorId,
     transaction_id: u64,
     approved_account: ActorId,
@@ -383,8 +407,11 @@ pub async fn token_approve(
         .calculate_handle_gas(None, program_id.into(), payload.encode(), 0, true, None)
         .await?;
 
-    api.send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+    let (message_id, _) = api
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
+
+    assert!(listener.message_processed(message_id).await?.succeed());
 
     Ok(())
 }
@@ -412,7 +439,7 @@ pub async fn token_check_balance(
         .await?;
 
     let (message_id, _hash) = api
-        .send_message(program_id.into(), payload.encode(), gas_info.min_limit, 0)
+        .send_message(program_id.into(), payload, gas_info.min_limit * 2, 0)
         .await?;
 
     let (stored_message, _) = api
@@ -518,9 +545,42 @@ pub async fn setup_gclient() -> Result<(GearApi, EventListener, ActorId, ActorId
     )
     .await?;
 
-    println!("FT_TOKEN_ID: {:?}", ft_token_id);
-    println!("FT_STORAGE_CODE_HASH: {:?}", ft_storage_code_hash);
-    println!("FT_LOGIC_CODE_HASH: {:?}", ft_logic_code_hash);
+    // 4. Fund applicants
+    let api = GearApi::dev().await?;
+    let alice_balance = api.total_balance(api.account_id()).await?;
+    let amount = alice_balance / (APPLICANTS.len() as u128 + 3);
+
+    api.transfer(
+        api.get_specific_actor_id(ADMIN)
+            .encode()
+            .as_slice()
+            .try_into()
+            .expect("Unexpected invalid `ProgramId`."),
+        amount,
+    )
+    .await?;
+    api.transfer(
+        api.get_specific_actor_id(RANDOM_APPLICANT)
+            .encode()
+            .as_slice()
+            .try_into()
+            .expect("Unexpected invalid `ProgramId`."),
+        amount,
+    )
+    .await?;
+    for applicant in APPLICANTS {
+        api.transfer(
+            api.get_specific_actor_id(applicant)
+                .encode()
+                .as_slice()
+                .try_into()
+                .expect("Unexpected invalid `ProgramId`."),
+            amount,
+        )
+        .await?;
+    }
+
+    let api = api.with(ADMIN)?;
 
     Ok((api, listener, ft_token_id, dao_id))
 }
