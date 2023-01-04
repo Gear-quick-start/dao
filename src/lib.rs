@@ -1,67 +1,56 @@
 #![no_std]
 
 pub mod ft_messages;
-pub mod io;
 pub mod state;
 pub mod utils;
 
+use crate::{ft_messages::*, state::*, utils::*};
+use dao_io::*;
 use gstd::{exec, msg, prelude::*, ActorId, String};
-use hashbrown::HashMap;
-
-use crate::{ft_messages::*, io::*, state::*};
 
 pub const BASE_PERCENT: u8 = 100;
 
-#[derive(Debug, Default)]
-struct Dao {
-    admin: ActorId,
-    approved_token_program_id: ActorId,
-    period_duration: u64,
-    voting_period_length: u64,
-    grace_period_length: u64,
-    dilution_bound: u8,
-    abort_window: u64,
-    total_shares: u128,
-    balance: u128,
-    members: HashMap<ActorId, Member>,
-    member_by_delegate_key: HashMap<ActorId, ActorId>,
-    proposal_id: u128,
-    proposals: HashMap<u128, Proposal>,
-    whitelist: Vec<ActorId>,
-    transaction_id: u64,
-    transactions: HashMap<u64, Option<DaoAction>>,
-}
-
-#[derive(Debug, Default, Clone, Decode, Encode, TypeInfo)]
-pub struct Proposal {
-    pub proposer: ActorId,
-    pub applicant: ActorId,
-    pub shares_requested: u128,
-    pub yes_votes: u128,
-    pub no_votes: u128,
-    pub quorum: u128,
-    pub is_membership_proposal: bool,
-    pub amount: u128,
-    pub processed: bool,
-    pub passed: bool,
-    pub aborted: bool,
-    pub token_tribute: u128,
-    pub details: String,
-    pub starting_period: u64,
-    pub max_total_shares_at_yes_vote: u128,
-    pub votes_by_member: Vec<(ActorId, Vote)>,
-}
-
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, Default)]
-pub struct Member {
-    pub delegate_key: ActorId,
-    pub shares: u128,
-    pub highest_index_yes_vote: u128,
-}
-
 static mut DAO: Option<Dao> = None;
 
-impl Dao {
+#[async_trait::async_trait]
+pub trait DaoHandler {
+    fn add_to_whitelist(&mut self, member: &ActorId);
+
+    async fn submit_membership_proposal(
+        &mut self,
+        transaction_id: Option<u64>,
+        applicant: &ActorId,
+        token_tribute: u128,
+        shares_requested: u128,
+        quorum: u128,
+        details: String,
+    );
+
+    fn submit_funding_proposal(
+        &mut self,
+        applicant: &ActorId,
+        amount: u128,
+        quorum: u128,
+        details: String,
+    );
+
+    fn submit_vote(&mut self, proposal_id: u128, vote: Vote);
+
+    async fn process_proposal(&mut self, transaction_id: Option<u64>, proposal_id: u128);
+
+    async fn ragequit(&mut self, transaction_id: Option<u64>, amount: u128);
+
+    async fn abort(&mut self, transaction_id: Option<u64>, proposal_id: u128);
+
+    fn set_admin(&mut self, new_admin: &ActorId);
+
+    fn update_delegate_key(&mut self, new_delegate_key: &ActorId);
+
+    async fn continue_transaction(&mut self, transaction_id: u64);
+}
+
+#[async_trait::async_trait]
+impl DaoHandler for Dao {
     fn add_to_whitelist(&mut self, member: &ActorId) {
         self.assert_admin();
         Self::assert_not_zero_address(member);
@@ -621,6 +610,18 @@ async fn main() {
         DaoAction::SetAdmin(account) => dao.set_admin(&account),
     }
 }
+
+#[no_mangle]
+extern "C" fn metahash() {
+    let metahash: [u8; 32] = include!("../.metahash");
+    msg::reply(metahash, 0).expect("Failed to share metahash");
+}
+
+/* #[no_mangle]
+extern "C" fn state() {
+    msg::reply(unsafe { DAO.clone().expect("Uninitialized dao state") }, 0)
+        .expect("Failed to share state");
+} */
 
 #[no_mangle]
 extern "C" fn meta_state() -> *mut [i32; 2] {

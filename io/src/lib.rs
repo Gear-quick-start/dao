@@ -1,4 +1,66 @@
+#![no_std]
+
+use gmeta::{In, InOut, Metadata};
 use gstd::{prelude::*, ActorId};
+use hashbrown::HashMap;
+
+pub struct DaoMetadata;
+
+impl Metadata for DaoMetadata {
+    type Init = In<InitDao>;
+    type Handle = InOut<DaoAction, DaoEvent>;
+    type Others = ();
+    type Reply = ();
+    type Signal = ();
+    type State = ();
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Dao {
+    pub admin: ActorId,
+    pub approved_token_program_id: ActorId,
+    pub period_duration: u64,
+    pub voting_period_length: u64,
+    pub grace_period_length: u64,
+    pub dilution_bound: u8,
+    pub abort_window: u64,
+    pub total_shares: u128,
+    pub balance: u128,
+    pub members: HashMap<ActorId, Member>,
+    pub member_by_delegate_key: HashMap<ActorId, ActorId>,
+    pub proposal_id: u128,
+    pub proposals: HashMap<u128, Proposal>,
+    pub whitelist: Vec<ActorId>,
+    pub transaction_id: u64,
+    pub transactions: HashMap<u64, Option<DaoAction>>,
+}
+
+#[derive(Debug, Default, Clone, Decode, Encode, TypeInfo)]
+pub struct Proposal {
+    pub proposer: ActorId,
+    pub applicant: ActorId,
+    pub shares_requested: u128,
+    pub yes_votes: u128,
+    pub no_votes: u128,
+    pub quorum: u128,
+    pub is_membership_proposal: bool,
+    pub amount: u128,
+    pub processed: bool,
+    pub passed: bool,
+    pub aborted: bool,
+    pub token_tribute: u128,
+    pub details: String,
+    pub starting_period: u64,
+    pub max_total_shares_at_yes_vote: u128,
+    pub votes_by_member: Vec<(ActorId, Vote)>,
+}
+
+#[derive(Debug, Clone, Encode, Decode, TypeInfo, Default)]
+pub struct Member {
+    pub delegate_key: ActorId,
+    pub shares: u128,
+    pub highest_index_yes_vote: u128,
+}
 
 #[derive(Debug, Decode, Encode, TypeInfo, Clone)]
 pub enum DaoAction {

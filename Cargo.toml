@@ -10,12 +10,14 @@ codec = { package = "parity-scale-codec", version = "3.2.1", default-features = 
 ft-main-io = { git = "https://github.com/gear-dapps/sharded-fungible-token.git", tag = "0.1.2" }
 ft-logic-io = { git = "https://github.com/gear-dapps/sharded-fungible-token.git", tag = "0.1.2" }
 gstd = { git = "https://github.com/gear-tech/gear.git", branch = "stable" }
-scale-info = { version = "2.3.0", default-features = false }
-hashbrown = "0.13.1"
+scale-info = { version = "2.3.1", default-features = false }
+dao-io = { path = "io" }
+async-trait = "0.1.60"
 
 [dev-dependencies]
 gstd = { git = "https://github.com/gear-tech/gear.git", branch = "stable", features = ["debug"] }
 gtest = { git = "https://github.com/gear-tech/gear.git", branch = "stable" }
 
 [build-dependencies]
-gear-wasm-builder = { git = "https://github.com/gear-tech/gear.git", branch = "stable" }
+gear-wasm-builder = { git = "https://github.com/gear-tech/gear.git", branch = "master" }
+dao-io = { path = "io" }
