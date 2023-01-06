@@ -1,10 +1,9 @@
 #![no_std]
 
 pub mod ft_messages;
-pub mod state;
 pub mod utils;
 
-use crate::{ft_messages::*, state::*, utils::*};
+use crate::{ft_messages::*, utils::*};
 use dao_io::*;
 use gstd::{exec, msg, prelude::*, ActorId, String};
 
@@ -518,18 +517,6 @@ impl DaoHandler for Dao {
     }
 }
 
-gstd::metadata! {
-    title: "DAO",
-    init:
-        input: InitDao,
-    handle:
-        input: DaoAction,
-        output: DaoEvent,
-    state:
-        input: State,
-        output: StateReply,
-}
-
 #[no_mangle]
 extern "C" fn init() {
     let config: InitDao = msg::load().expect("Unable to decode InitDao");
@@ -617,29 +604,15 @@ extern "C" fn metahash() {
     msg::reply(metahash, 0).expect("Failed to share metahash");
 }
 
-/* #[no_mangle]
-extern "C" fn state() {
-    msg::reply(unsafe { DAO.clone().expect("Uninitialized dao state") }, 0)
-        .expect("Failed to share state");
-} */
-
 #[no_mangle]
-extern "C" fn meta_state() -> *mut [i32; 2] {
-    let state: State = msg::load().expect("failed to decode input argument");
-    let dao: &mut Dao = unsafe { DAO.get_or_insert(Default::default()) };
-    let encoded = match state {
-        State::IsMember(account) => StateReply::IsMember(dao.is_member(&account)),
-        State::IsInWhitelist(account) => {
-            StateReply::IsInWhitelist(dao.whitelist.contains(&account))
-        }
-        State::ProposalId => StateReply::ProposalId(dao.proposal_id),
-        State::ProposalInfo(input) => {
-            StateReply::ProposalInfo(dao.proposals.get(&input).cloned().unwrap_or_default())
-        }
-        State::MemberInfo(account) => {
-            StateReply::MemberInfo(dao.members.get(&account).cloned().unwrap_or_default())
-        }
-    }
-    .encode();
-    gstd::util::to_leak_ptr(encoded)
+extern "C" fn state() {
+    msg::reply(
+        unsafe {
+            let dao = DAO.as_ref().expect("Uninitialized dao state");
+            let dao_state: DaoState = dao.into();
+            dao_state
+        },
+        0,
+    )
+    .expect("Failed to share state");
 }

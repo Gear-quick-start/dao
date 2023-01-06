@@ -12,7 +12,7 @@ impl Metadata for DaoMetadata {
     type Others = ();
     type Reply = ();
     type Signal = ();
-    type State = ();
+    type State = DaoState;
 }
 
 #[derive(Debug, Default, Clone)]
@@ -33,6 +33,113 @@ pub struct Dao {
     pub whitelist: Vec<ActorId>,
     pub transaction_id: u64,
     pub transactions: HashMap<u64, Option<DaoAction>>,
+}
+
+#[derive(Debug, Default, Clone, Encode, Decode, TypeInfo)]
+pub struct DaoState {
+    pub admin: ActorId,
+    pub approved_token_program_id: ActorId,
+    pub period_duration: u64,
+    pub voting_period_length: u64,
+    pub grace_period_length: u64,
+    pub dilution_bound: u8,
+    pub abort_window: u64,
+    pub total_shares: u128,
+    pub balance: u128,
+    pub members: Vec<(ActorId, Member)>,
+    pub member_by_delegate_key: Vec<(ActorId, ActorId)>,
+    pub proposal_id: u128,
+    pub proposals: Vec<(u128, Proposal)>,
+    pub whitelist: Vec<ActorId>,
+    pub transaction_id: u64,
+    pub transactions: Vec<(u64, Option<DaoAction>)>,
+}
+
+impl From<&Dao> for DaoState {
+    fn from(dao: &Dao) -> DaoState {
+        DaoState {
+            admin: dao.admin,
+            approved_token_program_id: dao.approved_token_program_id,
+            period_duration: dao.period_duration,
+            voting_period_length: dao.voting_period_length,
+            grace_period_length: dao.grace_period_length,
+            dilution_bound: dao.dilution_bound,
+            abort_window: dao.abort_window,
+            total_shares: dao.total_shares,
+            balance: dao.balance,
+            members: dao
+                .members
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect(),
+            member_by_delegate_key: dao
+                .member_by_delegate_key
+                .iter()
+                .map(|(key, value)| (*key, *value))
+                .collect(),
+            proposal_id: dao.proposal_id,
+            proposals: dao
+                .proposals
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect(),
+            whitelist: dao.whitelist.clone(),
+            transaction_id: dao.transaction_id,
+            transactions: dao
+                .transactions
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect(),
+        }
+    }
+}
+
+impl DaoState {
+    pub fn is_member(state: <DaoMetadata as Metadata>::State, account: &ActorId) -> bool {
+        state
+            .members
+            .iter()
+            .find(|(member_account, member)| member_account == account && member.shares != 0)
+            .is_some()
+    }
+
+    pub fn is_in_whitelist(state: <DaoMetadata as Metadata>::State, account: &ActorId) -> bool {
+        state.whitelist.contains(account)
+    }
+
+    pub fn get_proposal_id(state: <DaoMetadata as Metadata>::State) -> u128 {
+        state.proposal_id
+    }
+
+    pub fn get_proposal_info(
+        state: <DaoMetadata as Metadata>::State,
+        id: u128,
+    ) -> Option<Proposal> {
+        if let Some((_, proposal)) = state
+            .proposals
+            .iter()
+            .find(|(proposal_id, _)| proposal_id == &id)
+        {
+            Some(proposal.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_member_info(
+        state: <DaoMetadata as Metadata>::State,
+        account: &ActorId,
+    ) -> Option<Member> {
+        if let Some((_, member)) = state
+            .members
+            .iter()
+            .find(|(member_account, _)| member_account == account)
+        {
+            Some(member.clone())
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Decode, Encode, TypeInfo)]
