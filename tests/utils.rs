@@ -17,6 +17,7 @@ pub const APPLICANTS: &[u64] = &[10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 pub trait Dao {
     fn dao(system: &System) -> Program;
     fn add_to_whitelist(&self, from: u64, account: u64, error: bool);
+    #[allow(clippy::too_many_arguments)]
     fn submit_membership_proposal(
         &self,
         from: u64,

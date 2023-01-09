@@ -1,4 +1,5 @@
-use crate::*;
+use dao_io::Dao;
+use gstd::{msg, prelude::*, ActorId};
 
 pub trait DaoUtils {
     fn redeemable_funds(&self, share: u128) -> u128;

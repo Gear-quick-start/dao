@@ -99,8 +99,7 @@ impl DaoState {
         state
             .members
             .iter()
-            .find(|(member_account, member)| member_account == account && member.shares != 0)
-            .is_some()
+            .any(|(member_account, member)| member_account == account && member.shares != 0)
     }
 
     pub fn is_in_whitelist(state: <DaoMetadata as Metadata>::State, account: &ActorId) -> bool {
