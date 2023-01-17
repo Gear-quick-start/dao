@@ -1,23 +1,9 @@
-use dao_io::Dao;
+use crate::contract::Dao;
 use gstd::{msg, prelude::*, ActorId};
 
-pub trait DaoUtils {
-    fn redeemable_funds(&self, share: u128) -> u128;
-
-    fn is_member(&self, account: &ActorId) -> bool;
-
-    fn check_for_membership(&self);
-
-    fn get_transaction_id(&mut self, transaction_id: Option<u64>) -> u64;
-
-    fn assert_admin(&self);
-
-    fn assert_not_zero_address(address: &ActorId);
-}
-
-impl DaoUtils for Dao {
+impl Dao {
     // calculates the funds that the member can redeem based on his shares
-    fn redeemable_funds(&self, share: u128) -> u128 {
+    pub fn redeemable_funds(&self, share: u128) -> u128 {
         if self.total_shares > 0 {
             (share.saturating_mul(self.balance)) / self.total_shares
         } else {
@@ -26,12 +12,12 @@ impl DaoUtils for Dao {
     }
 
     // checks that account is DAO member
-    fn is_member(&self, account: &ActorId) -> bool {
+    pub fn is_member(&self, account: &ActorId) -> bool {
         matches!(self.members.get(account), Some(member) if member.shares != 0)
     }
 
     // check that `msg::source()` is either a DAO member or a delegate key
-    fn check_for_membership(&self) {
+    pub fn check_for_membership(&self) {
         match self.member_by_delegate_key.get(&msg::source()) {
             Some(member) if !self.is_member(member) => panic!("account is not a DAO member"),
             None => panic!("account is not a delegate"),
@@ -41,7 +27,7 @@ impl DaoUtils for Dao {
 
     // Determine either this is a new transaction
     // or the transaction which has to be completed
-    fn get_transaction_id(&mut self, transaction_id: Option<u64>) -> u64 {
+    pub fn get_transaction_id(&mut self, transaction_id: Option<u64>) -> u64 {
         match transaction_id {
             Some(transaction_id) => transaction_id,
             None => {
@@ -52,11 +38,11 @@ impl DaoUtils for Dao {
         }
     }
 
-    fn assert_admin(&self) {
+    pub fn assert_admin(&self) {
         assert_eq!(msg::source(), self.admin, "msg::source() must be DAO admin");
     }
 
-    fn assert_not_zero_address(address: &ActorId) {
+    pub fn assert_not_zero_address(address: &ActorId) {
         assert!(!address.is_zero(), "Zero address");
     }
 }

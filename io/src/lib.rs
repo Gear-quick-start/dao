@@ -2,7 +2,6 @@
 
 use gmeta::{In, InOut, Metadata};
 use gstd::{prelude::*, ActorId};
-use hashbrown::HashMap;
 
 pub struct DaoMetadata;
 
@@ -13,26 +12,6 @@ impl Metadata for DaoMetadata {
     type Reply = ();
     type Signal = ();
     type State = DaoState;
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct Dao {
-    pub admin: ActorId,
-    pub approved_token_program_id: ActorId,
-    pub period_duration: u64,
-    pub voting_period_length: u64,
-    pub grace_period_length: u64,
-    pub dilution_bound: u8,
-    pub abort_window: u64,
-    pub total_shares: u128,
-    pub balance: u128,
-    pub members: HashMap<ActorId, Member>,
-    pub member_by_delegate_key: HashMap<ActorId, ActorId>,
-    pub proposal_id: u128,
-    pub proposals: HashMap<u128, Proposal>,
-    pub whitelist: Vec<ActorId>,
-    pub transaction_id: u64,
-    pub transactions: HashMap<u64, Option<DaoAction>>,
 }
 
 #[derive(Debug, Default, Clone, Encode, Decode, TypeInfo)]
@@ -53,45 +32,6 @@ pub struct DaoState {
     pub whitelist: Vec<ActorId>,
     pub transaction_id: u64,
     pub transactions: Vec<(u64, Option<DaoAction>)>,
-}
-
-impl From<&Dao> for DaoState {
-    fn from(dao: &Dao) -> DaoState {
-        DaoState {
-            admin: dao.admin,
-            approved_token_program_id: dao.approved_token_program_id,
-            period_duration: dao.period_duration,
-            voting_period_length: dao.voting_period_length,
-            grace_period_length: dao.grace_period_length,
-            dilution_bound: dao.dilution_bound,
-            abort_window: dao.abort_window,
-            total_shares: dao.total_shares,
-            balance: dao.balance,
-            members: dao
-                .members
-                .iter()
-                .map(|(key, value)| (*key, value.clone()))
-                .collect(),
-            member_by_delegate_key: dao
-                .member_by_delegate_key
-                .iter()
-                .map(|(key, value)| (*key, *value))
-                .collect(),
-            proposal_id: dao.proposal_id,
-            proposals: dao
-                .proposals
-                .iter()
-                .map(|(key, value)| (*key, value.clone()))
-                .collect(),
-            whitelist: dao.whitelist.clone(),
-            transaction_id: dao.transaction_id,
-            transactions: dao
-                .transactions
-                .iter()
-                .map(|(key, value)| (*key, value.clone()))
-                .collect(),
-        }
-    }
 }
 
 impl DaoState {

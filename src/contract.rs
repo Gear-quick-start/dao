@@ -1,51 +1,34 @@
-use crate::{ft_messages::*, utils::*};
+use crate::ft_messages::*;
 use dao_io::*;
 use gstd::{exec, msg, prelude::*, ActorId, String};
+use hashbrown::HashMap;
 
 pub const BASE_PERCENT: u8 = 100;
 
 static mut DAO: Option<Dao> = None;
 
-#[async_trait::async_trait]
-pub trait DaoHandler {
-    fn add_to_whitelist(&mut self, member: &ActorId);
-
-    async fn submit_membership_proposal(
-        &mut self,
-        transaction_id: Option<u64>,
-        applicant: &ActorId,
-        token_tribute: u128,
-        shares_requested: u128,
-        quorum: u128,
-        details: String,
-    );
-
-    fn submit_funding_proposal(
-        &mut self,
-        applicant: &ActorId,
-        amount: u128,
-        quorum: u128,
-        details: String,
-    );
-
-    fn submit_vote(&mut self, proposal_id: u128, vote: Vote);
-
-    async fn process_proposal(&mut self, transaction_id: Option<u64>, proposal_id: u128);
-
-    async fn ragequit(&mut self, transaction_id: Option<u64>, amount: u128);
-
-    async fn abort(&mut self, transaction_id: Option<u64>, proposal_id: u128);
-
-    fn set_admin(&mut self, new_admin: &ActorId);
-
-    fn update_delegate_key(&mut self, new_delegate_key: &ActorId);
-
-    async fn continue_transaction(&mut self, transaction_id: u64);
+#[derive(Debug, Default)]
+pub struct Dao {
+    pub admin: ActorId,
+    pub approved_token_program_id: ActorId,
+    pub period_duration: u64,
+    pub voting_period_length: u64,
+    pub grace_period_length: u64,
+    pub dilution_bound: u8,
+    pub abort_window: u64,
+    pub total_shares: u128,
+    pub balance: u128,
+    pub members: HashMap<ActorId, Member>,
+    pub member_by_delegate_key: HashMap<ActorId, ActorId>,
+    pub proposal_id: u128,
+    pub proposals: HashMap<u128, Proposal>,
+    pub whitelist: Vec<ActorId>,
+    pub transaction_id: u64,
+    pub transactions: HashMap<u64, Option<DaoAction>>,
 }
 
-#[async_trait::async_trait]
-impl DaoHandler for Dao {
-    fn add_to_whitelist(&mut self, member: &ActorId) {
+impl Dao {
+    pub fn add_to_whitelist(&mut self, member: &ActorId) {
         self.assert_admin();
         Self::assert_not_zero_address(member);
 
@@ -57,7 +40,7 @@ impl DaoHandler for Dao {
             .expect("Error in a reply `DaoEvent::MemberAddedToWhitelist`");
     }
 
-    async fn submit_membership_proposal(
+    pub async fn submit_membership_proposal(
         &mut self,
         transaction_id: Option<u64>,
         applicant: &ActorId,
@@ -130,7 +113,7 @@ impl DaoHandler for Dao {
         .expect("Error in a reply `DaoEvent::SubmitMembershipProposal`");
     }
 
-    fn submit_funding_proposal(
+    pub fn submit_funding_proposal(
         &mut self,
         applicant: &ActorId,
         amount: u128,
@@ -179,7 +162,7 @@ impl DaoHandler for Dao {
         .expect("Error in a reply `DaoEvent::SubmitFungingProposal");
     }
 
-    fn submit_vote(&mut self, proposal_id: u128, vote: Vote) {
+    pub fn submit_vote(&mut self, proposal_id: u128, vote: Vote) {
         let proposal = match self.proposals.get_mut(&proposal_id) {
             Some(proposal) => {
                 if exec::block_timestamp() > proposal.starting_period + self.voting_period_length {
@@ -242,7 +225,7 @@ impl DaoHandler for Dao {
         .expect("Error in a reply `DaoEvent::SubmitVote`");
     }
 
-    async fn process_proposal(&mut self, transaction_id: Option<u64>, proposal_id: u128) {
+    pub async fn process_proposal(&mut self, transaction_id: Option<u64>, proposal_id: u128) {
         let current_transaction_id = self.get_transaction_id(transaction_id);
         if proposal_id > 0
             && !self
@@ -338,7 +321,7 @@ impl DaoHandler for Dao {
         .expect("Error in a reply `DaoEvent::ProcessProposal`");
     }
 
-    async fn ragequit(&mut self, transaction_id: Option<u64>, amount: u128) {
+    pub async fn ragequit(&mut self, transaction_id: Option<u64>, amount: u128) {
         let current_transaction_id = self.get_transaction_id(transaction_id);
         if self.admin == msg::source() {
             panic!("admin can not ragequit");
@@ -393,7 +376,7 @@ impl DaoHandler for Dao {
         };
     }
 
-    async fn abort(&mut self, transaction_id: Option<u64>, proposal_id: u128) {
+    pub async fn abort(&mut self, transaction_id: Option<u64>, proposal_id: u128) {
         let current_transaction_id = self.get_transaction_id(transaction_id);
         let proposal = self
             .proposals
@@ -441,7 +424,7 @@ impl DaoHandler for Dao {
         };
     }
 
-    fn set_admin(&mut self, new_admin: &ActorId) {
+    pub fn set_admin(&mut self, new_admin: &ActorId) {
         self.assert_admin();
         Self::assert_not_zero_address(new_admin);
         self.admin = *new_admin;
@@ -449,7 +432,7 @@ impl DaoHandler for Dao {
             .expect("Error in a reply `DaoEvent::AdminUpdated`");
     }
 
-    fn update_delegate_key(&mut self, new_delegate_key: &ActorId) {
+    pub fn update_delegate_key(&mut self, new_delegate_key: &ActorId) {
         if self.member_by_delegate_key.contains_key(new_delegate_key) {
             panic!("cannot overwrite existing delegate keys");
         }
@@ -472,7 +455,7 @@ impl DaoHandler for Dao {
         .expect("Error in a reply `DaoEvent::DelegateKeyUpdated`");
     }
 
-    async fn continue_transaction(&mut self, transaction_id: u64) {
+    pub async fn continue_transaction(&mut self, transaction_id: u64) {
         let transactions = self.transactions.clone();
         let payload = &transactions
             .get(&transaction_id)
@@ -508,6 +491,45 @@ impl DaoHandler for Dao {
                 }
                 _ => unreachable!(),
             }
+        }
+    }
+}
+
+impl From<&Dao> for DaoState {
+    fn from(dao: &Dao) -> DaoState {
+        DaoState {
+            admin: dao.admin,
+            approved_token_program_id: dao.approved_token_program_id,
+            period_duration: dao.period_duration,
+            voting_period_length: dao.voting_period_length,
+            grace_period_length: dao.grace_period_length,
+            dilution_bound: dao.dilution_bound,
+            abort_window: dao.abort_window,
+            total_shares: dao.total_shares,
+            balance: dao.balance,
+            members: dao
+                .members
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect(),
+            member_by_delegate_key: dao
+                .member_by_delegate_key
+                .iter()
+                .map(|(key, value)| (*key, *value))
+                .collect(),
+            proposal_id: dao.proposal_id,
+            proposals: dao
+                .proposals
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect(),
+            whitelist: dao.whitelist.clone(),
+            transaction_id: dao.transaction_id,
+            transactions: dao
+                .transactions
+                .iter()
+                .map(|(key, value)| (*key, value.clone()))
+                .collect(),
         }
     }
 }
