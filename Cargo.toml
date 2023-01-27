@@ -6,8 +6,8 @@ authors = ["Gear Technologies"]
 license = "MIT"
 
 [dependencies]
-ft-main-io = { git = "https://github.com/gear-dapps/sharded-fungible-token.git", tag = "0.1.2" }
-ft-logic-io = { git = "https://github.com/gear-dapps/sharded-fungible-token.git", tag = "0.1.2" }
+ft-main-io = { git = "https://github.com/gear-dapps/sharded-fungible-token.git", tag = "0.1.3" }
+ft-logic-io = { git = "https://github.com/gear-dapps/sharded-fungible-token.git", tag = "0.1.3" }
 gstd = { git = "https://github.com/gear-tech/gear.git", branch = "stable" }
 dao-io = { path = "io" }
 hashbrown = "0.13.1"
@@ -18,7 +18,7 @@ gtest = { git = "https://github.com/gear-tech/gear.git", branch = "stable" }
 
 [build-dependencies]
 dao-io = { path = "io" }
-gear-wasm-builder = { git = "https://github.com/gear-tech/gear.git" }
+gear-wasm-builder = { git = "https://github.com/gear-tech/gear.git", branch = "stable" }
 
 [features]
 # Used for inserting constants with WASM binaries (NOT paths) of the contract in
