@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_member_info","get_proposal_id","get_proposal_info","is_in_whitelist","is_member"],"type":["State"]};
