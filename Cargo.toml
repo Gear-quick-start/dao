@@ -43,13 +43,13 @@ license = "MIT"
 
 [workspace.dependencies]
 ft-main-io = { git = "https://github.com/gear-dapps/sharded-fungible-token", tag = "2.1.2" }
-gstd = { git = "https://github.com/gear-tech/gear", rev = "78dfa07" }
+gstd = { git = "https://github.com/gear-tech/gear.git", rev = "78dfa07" }
 dao-io = { path = "io" }
 dao-state = { path = "state" }
 hashbrown = "0.13"
-gmeta = { git = "https://github.com/gear-tech/gear", rev = "78dfa07" }
-gtest = { git = "https://github.com/gear-tech/gear", rev = "78dfa07" }
-gclient = { git = "https://github.com/gear-tech/gear", rev = "78dfa07" }
+gmeta = { git = "https://github.com/gear-tech/gear.git", rev = "78dfa07" }
+gtest = { git = "https://github.com/gear-tech/gear.git", rev = "78dfa07" }
+gclient = { git = "https://github.com/gear-tech/gear.git", rev = "78dfa07" }
 subxt = { version = "0.27", default-features = false }
 tokio = "1"
 blake2-rfc = { version = "0.2.18", default-features = false }
